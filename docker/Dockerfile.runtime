@@ -1,0 +1,12 @@
+# Akili sandbox runtime image.
+FROM alpine:3.21
+
+RUN apk add --no-cache \
+        python3 \
+        bash \
+        git \
+        curl \
+    && adduser -D -u 1001 -h /home/sandbox sandbox
+
+USER 1001
+WORKDIR /home/sandbox

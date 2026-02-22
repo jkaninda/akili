@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: akili
+      POSTGRES_PASSWORD: akili
+      POSTGRES_DB: akili
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U akili"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  akili:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      AKILI_DB_DSN: postgres://akili:akili@postgres:5432/akili?sslmode=disable
+      AKILI_API_KEYS: dev-key:dev-user
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./configs/akili-docker.json:/etc/akili/config.json:ro
+      - ./configs/heartbeat-tasks:/etc/akili/heartbeat-tasks:ro
+      - akili-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # ****** Optional: Monitoring stack (uncomment to enable) *******
+
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #   depends_on:
+  #     akili:
+  #       condition: service_healthy
+
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     GF_SECURITY_ADMIN_PASSWORD: admin
+  #   volumes:
+  #     - grafana-data:/var/lib/grafana
+  #   depends_on:
+  #     - prometheus
+
+volumes:
+  pgdata:
+  akili-data:
+  # grafana-data:

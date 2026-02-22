@@ -1,0 +1,19 @@
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history
+data
+.env
+.env.local
+.env.*.local
+coverage.out
+.idea
+bin/
+coverage.txt
+coverage.out

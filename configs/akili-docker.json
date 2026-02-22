@@ -1,0 +1,238 @@
+{
+  "workspace": "/home/akili/workspace",
+  "data_dir": "/data",
+  "storage": {
+    "driver": "postgres",
+    "postgres": {
+      "dsn": "postgres://akili:akili@postgres:5432/akili?sslmode=disable",
+      "max_open_conns": 25,
+      "max_idle_conns": 5,
+      "conn_max_lifetime_s": 1800,
+      "default_org_name": "default"
+    }
+  },
+  "security": {
+    "default_permissions": ["read_files", "web_search"],
+    "require_approval": ["write_files", "shell_exec"],
+    "default_role": "operator",
+    "roles": {
+      "viewer": {
+        "permissions": ["read_files", "web_search", "database_read", "infra_lookup"],
+        "max_risk_level": "low",
+        "require_approval": []
+      },
+      "operator": {
+        "permissions": ["read_files", "web_search", "shell_exec", "write_files", "git_read", "git_write", "database_read", "browser_navigate", "create_cronjob", "create_alert", "send_notification", "infra_lookup", "infra_exec"],
+        "max_risk_level": "high",
+        "require_approval": ["shell_exec", "git_write", "create_cronjob", "create_alert", "infra_exec"]
+      },
+      "admin": {
+        "permissions": ["read_files", "web_search", "shell_exec", "write_files", "git_read", "git_write", "code_exec", "database_read", "browser_navigate", "create_cronjob", "create_alert", "send_notification", "infra_lookup", "infra_manage", "infra_exec"],
+        "max_risk_level": "critical",
+        "require_approval": ["code_exec", "create_alert", "infra_exec", "infra_manage"]
+      }
+    },
+    "user_roles": {
+      "dev-user": "admin"
+    }
+  },
+  "budget": {
+    "default_limit_usd": 10.0
+  },
+  "sandbox": {
+    "type": "process",
+    "max_cpu_cores": 1,
+    "max_memory_mb": 512,
+    "max_execution_seconds": 30,
+    "network_allowed": false
+  },
+  "tools": {
+    "file": {
+      "allowed_paths": ["/tmp/akili"],
+      "max_file_size_bytes": 10485760
+    },
+    "web": {
+      "allowed_domains": [],
+      "max_response_bytes": 5242880,
+      "timeout_seconds": 15
+    },
+    "code": {
+      "allowed_languages": ["python3", "sh"]
+    },
+    "database": {
+      "dsn": "",
+      "default_org_name": "",
+      "max_rows": 1000,
+      "timeout_seconds": 30
+    },
+    "git": {
+      "allowed_paths": []
+    },
+    "mcp": []
+  },
+  "gateways": {
+    "cli": {
+      "enabled": false
+    },
+    "http": {
+      "enabled": true,
+      "listen_addr": ":8080",
+      "enable_docs": true,
+      "max_request_size_bytes": 1048576,
+      "api_key_user_mapping": {},
+      "rate_limit": {
+        "requests_per_minute": 60,
+        "burst_size": 10
+      }
+    },
+    "websocket": {
+      "enabled": true,
+      "path": "/ws/agents",
+      "agent_token": "",
+      "heartbeat_interval_seconds": 30,
+      "task_reassign_timeout_seconds": 120
+    },
+    "slack": {
+      "enabled": false,
+      "signing_secret": "",
+      "bot_token": "",
+      "listen_addr": ":3000",
+      "user_mapping": {},
+      "default_user_role": "",
+      "approval_channel": "",
+      "rate_limit": {
+        "requests_per_minute": 30,
+        "burst_size": 5
+      }
+    },
+    "telegram": {
+      "enabled": false,
+      "bot_token": "",
+      "webhook_url": "",
+      "listen_addr": ":3001",
+      "allowed_users": [],
+      "user_mapping": {},
+      "poll_timeout_seconds": 30,
+      "rate_limit": {
+        "requests_per_minute": 30,
+        "burst_size": 5
+      }
+    },
+    "signal": {
+      "enabled": false,
+      "api_url": "http://signal-cli:8080",
+      "sender_number": "",
+      "allowed_users": [],
+      "user_mapping": {},
+      "poll_interval_seconds": 2,
+      "rate_limit": {
+        "requests_per_minute": 30,
+        "burst_size": 5
+      }
+    }
+  },
+  "approval": {
+    "ttl_seconds": 300,
+    "auto_approval": {
+      "enabled": false,
+      "max_auto_approvals": 10,
+      "allowed_tools": [],
+      "required_approvals": 3,
+      "window_hours": 24
+    }
+  },
+  "providers": {
+    "default": "anthropic",
+    "fallback": ["openai", "gemini"],
+    "anthropic": {
+      "model": "claude-sonnet-4-5-20250929"
+    },
+    "openai": {
+      "model": "gpt-4o"
+    },
+    "gemini": {
+      "model": "gemini-2.0-flash"
+    },
+    "ollama": {
+      "model": "qwen3:8b",
+      "base_url": "http://localhost:11434"
+    }
+  },
+  "memory": {
+    "enabled": true,
+    "max_history_messages": 100,
+    "max_message_bytes": 32768
+  },
+  "notification": {
+    "enabled": false,
+    "email": {
+      "host": "",
+      "port": 587,
+      "username": "",
+      "from": "",
+      "tls": true
+    },
+    "whatsapp": {
+      "access_token": ""
+    },
+    "signal": {
+      "api_url": "http://signal-cli:8080",
+      "sender_number": ""
+    }
+  },
+  "alerting": {
+    "enabled": false,
+    "poll_interval_seconds": 30,
+    "max_concurrent_checks": 10,
+    "default_cooldown_seconds": 300
+  },
+  "heartbeat_tasks": {
+    "enabled": false,
+    "tasks_dirs": ["/etc/akili/heartbeat-tasks"],
+    "poll_interval_seconds": 30,
+    "file_poll_interval_seconds": 60,
+    "max_concurrent_tasks": 3,
+    "quick_task_timeout_seconds": 60,
+    "long_task_timeout_seconds": 300,
+    "default_user_id": "system"
+  },
+  "orchestrator": {
+    "enabled": true,
+    "max_depth": 5,
+    "max_tasks": 50,
+    "skills_dir": ""
+  },
+  "scheduler": {
+    "enabled": true,
+    "poll_interval_seconds": 30,
+    "max_concurrent_jobs": 5,
+    "missed_job_window_seconds": 3600
+  },
+  "observability": {
+    "metrics": {
+      "enabled": true,
+      "path": "/metrics"
+    },
+    "tracing": {
+      "enabled": false,
+      "endpoint": "localhost:4317",
+      "protocol": "grpc",
+      "service_name": "akili",
+      "sample_rate": 1.0
+    },
+    "anomaly": {
+      "enabled": true,
+      "error_rate_threshold": 0.5,
+      "budget_spike_multiplier": 3.0,
+      "window_seconds": 300
+    }
+  },
+  "infrastructure": {
+    "enabled": true
+  },
+  "secrets": {
+    "providers": [
+      { "type": "env" }
+    ]
+  }
+}
