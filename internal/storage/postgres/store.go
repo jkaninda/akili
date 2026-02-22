@@ -25,23 +25,23 @@ import (
 type Store struct {
 	pgDB *DB
 
-	mu            sync.Mutex
-	conversations agent.ConversationStore
-	workflows     orchestrator.WorkflowStore
-	skills        orchestrator.SkillStore
-	cronJobs      scheduler.CronJobStore
-	alertRules    alerting.AlertRuleStore
-	alertHistory  alerting.AlertHistoryStore
-	channels      notification.ChannelStore
-	infraNodes    infra.Store
-	approvals     approval.ApprovalStore
-	identities    identity.IdentityStore
-	heartbeats         heartbeat.HeartbeatStore
-	heartbeatTasks     heartbeattask.HeartbeatTaskStore
-	heartbeatTaskRes   heartbeattask.HeartbeatTaskResultStore
-	roles              security.RoleStore
-	budgets       security.BudgetStore
-	audit         security.AuditStore
+	mu               sync.Mutex
+	conversations    agent.ConversationStore
+	workflows        orchestrator.WorkflowStore
+	skills           orchestrator.SkillStore
+	cronJobs         scheduler.CronJobStore
+	alertRules       alerting.AlertRuleStore
+	alertHistory     alerting.AlertHistoryStore
+	channels         notification.ChannelStore
+	infraNodes       infra.Store
+	approvals        approval.ApprovalStore
+	identities       identity.IdentityStore
+	heartbeats       heartbeat.HeartbeatStore
+	heartbeatTasks   heartbeattask.HeartbeatTaskStore
+	heartbeatTaskRes heartbeattask.HeartbeatTaskResultStore
+	roles            security.RoleStore
+	budgets          security.BudgetStore
+	audit            security.AuditStore
 
 	// In-memory agent registry.
 	agentsMu sync.RWMutex

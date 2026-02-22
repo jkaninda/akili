@@ -22,19 +22,19 @@ import (
 
 // allowedWriteSubcommands are local git operations that modify the repository.
 var allowedWriteSubcommands = map[string]bool{
-	"add":      true,
-	"commit":   true,
-	"checkout": true,
-	"branch":   true,
-	"tag":      true,
-	"stash":    true,
-	"merge":    true,
-	"rebase":   true,
-	"reset":    true,
-	"rm":       true,
-	"mv":       true,
-	"restore":  true,
-	"switch":   true,
+	"add":         true,
+	"commit":      true,
+	"checkout":    true,
+	"branch":      true,
+	"tag":         true,
+	"stash":       true,
+	"merge":       true,
+	"rebase":      true,
+	"reset":       true,
+	"rm":          true,
+	"mv":          true,
+	"restore":     true,
+	"switch":      true,
 	"cherry-pick": true,
 }
 

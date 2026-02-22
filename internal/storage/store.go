@@ -84,8 +84,8 @@ type Config struct {
 
 // SQLiteConfig holds SQLite-specific settings.
 type SQLiteConfig struct {
-	Path        string `json:"path,omitempty"`    // Database file path. Default: derived from workspace.
-	JournalMode string `json:"journal_mode"`      // "wal" (default), "delete", "truncate", etc.
+	Path        string `json:"path,omitempty"` // Database file path. Default: derived from workspace.
+	JournalMode string `json:"journal_mode"`   // "wal" (default), "delete", "truncate", etc.
 }
 
 // PostgresConfig holds PostgreSQL-specific settings.

@@ -38,7 +38,7 @@ const (
 // Every message sent between Gateway and Agent is wrapped in an Envelope.
 type Envelope struct {
 	Type      MessageType     `json:"type"`
-	ID        string          `json:"id"`                  // Message ID for correlation and deduplication.
+	ID        string          `json:"id"` // Message ID for correlation and deduplication.
 	AgentID   string          `json:"agent_id,omitempty"`
 	TaskID    string          `json:"task_id,omitempty"`
 	Payload   json.RawMessage `json:"payload,omitempty"`

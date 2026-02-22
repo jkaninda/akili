@@ -384,7 +384,7 @@ type Envelope struct {
 // EnvelopeData contains the envelope fields.
 type EnvelopeData struct {
 	Source      string       `json:"source"`
-	Timestamp   int64       `json:"timestamp"`
+	Timestamp   int64        `json:"timestamp"`
 	DataMessage *DataMessage `json:"dataMessage,omitempty"`
 }
 
@@ -392,7 +392,7 @@ type EnvelopeData struct {
 type DataMessage struct {
 	Timestamp int64      `json:"timestamp"`
 	Message   string     `json:"message"`
-	GroupInfo  *GroupInfo `json:"groupInfo,omitempty"`
+	GroupInfo *GroupInfo `json:"groupInfo,omitempty"`
 }
 
 // GroupInfo represents Signal group metadata.

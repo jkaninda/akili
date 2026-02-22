@@ -10,9 +10,9 @@ import (
 // Role defines a named set of permissions with a maximum auto-approved risk level.
 type Role struct {
 	Name            string   `json:"name"`
-	Permissions     []string `json:"permissions"`       // Explicitly allowed action names.
-	MaxRiskLevel    string   `json:"max_risk_level"`    // Highest risk level allowed without approval.
-	RequireApproval []string `json:"require_approval"`  // Actions that always require approval.
+	Permissions     []string `json:"permissions"`      // Explicitly allowed action names.
+	MaxRiskLevel    string   `json:"max_risk_level"`   // Highest risk level allowed without approval.
+	RequireApproval []string `json:"require_approval"` // Actions that always require approval.
 }
 
 // RBACConfig is the full role-based access control configuration.

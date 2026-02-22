@@ -270,10 +270,10 @@ func normalizeFinishReason(reason string, hasToolCalls bool) string {
 // --- Gemini API wire types (unexported) ---
 
 type apiRequest struct {
-	Contents         []apiContent         `json:"contents"`
+	Contents          []apiContent         `json:"contents"`
 	SystemInstruction *apiContent          `json:"system_instruction,omitempty"`
-	Tools            []apiToolDeclaration `json:"tools,omitempty"`
-	GenerationConfig *apiGenerationConfig `json:"generation_config,omitempty"`
+	Tools             []apiToolDeclaration `json:"tools,omitempty"`
+	GenerationConfig  *apiGenerationConfig `json:"generation_config,omitempty"`
 }
 
 type apiContent struct {

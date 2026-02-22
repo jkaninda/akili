@@ -31,7 +31,7 @@ type IdentityConfig struct {
 	AgentID          string             // Unique persistent identifier (UUID).
 	Name             string             // Human-readable name.
 	Version          string             // Agent software version.
-	PublicKey        ed25519.PublicKey   // For verifiable signing.
+	PublicKey        ed25519.PublicKey  // For verifiable signing.
 	PrivateKey       ed25519.PrivateKey // For signing messages (never leaves agent).
 	Capabilities     []string           // Registered capabilities (tool names, roles).
 	TrustLevel       TrustLevel         // Assigned by gateway.

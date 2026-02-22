@@ -113,8 +113,10 @@ func NewReadTool(cfg Config, logger *slog.Logger) *ReadTool {
 	return &ReadTool{config: cfg, logger: logger}
 }
 
-func (t *ReadTool) Name() string        { return "file_read" }
-func (t *ReadTool) Description() string { return "Read file contents or list directory within allowed paths" }
+func (t *ReadTool) Name() string { return "file_read" }
+func (t *ReadTool) Description() string {
+	return "Read file contents or list directory within allowed paths"
+}
 func (t *ReadTool) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
