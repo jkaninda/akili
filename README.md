@@ -136,13 +136,20 @@ Every tool declares its required security action and risk level. The orchestrato
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.22+ (for building from source)
+- Docker and Docker Compose (for containerized deployment)
 - An LLM API key (Anthropic, OpenAI, or Google Gemini — or a local Ollama instance)
 
-### Build
+### Build from Source
 
 ```bash
 go build -o akili ./cmd/akili
+```
+
+Or using Make:
+
+```bash
+make build
 ```
 
 ### Version
@@ -157,6 +164,68 @@ Build with version info via ldflags:
 ```bash
 go build -ldflags "-X main.version=1.0.0 -X main.commit=$(git rev-parse --short HEAD) -X main.date=$(date -u +%Y-%m-%d)" -o akili ./cmd/akili
 ```
+
+### Build with Docker
+
+Build the application Docker image:
+
+```bash
+make docker-build
+```
+
+Build the sandbox runtime image (used for Docker-based sandboxed execution):
+
+```bash
+docker build -t akili-runtime:latest -f docker/Dockerfile.runtime .
+```
+
+Or using Make:
+
+```bash
+make docker-runtime
+```
+
+### Docker Compose
+
+The project includes a `docker-compose.yml` that starts Akili with a PostgreSQL database.
+
+**1. Create a `.env` file** with your LLM API key:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+**2. Start the stack:**
+
+```bash
+docker compose up -d
+```
+
+Or using Make:
+
+```bash
+make up
+```
+
+**3. Verify it's running:**
+
+```bash
+curl http://localhost:8080/healthz
+```
+
+**Available Make targets for Docker Compose:**
+
+| Target | Description |
+|--------|-------------|
+| `make up` | Start the Docker Compose stack |
+| `make down` | Stop the Docker Compose stack |
+| `make restart` | Restart the Akili container |
+| `make logs` | Tail Docker Compose logs |
+| `make ps` | Show running containers |
+| `make dev` | Build image and start the full stack |
+| `make dev-down` | Stop stack and remove volumes |
+| `make dev-logs` | Tail Akili container logs |
+| `make dev-restart` | Rebuild image and restart Akili container |
 
 ### Generate Configuration
 
