@@ -4,16 +4,31 @@
 
 Akili is a production-grade AI agent that automates incident triage, runbook execution, infrastructure operations, and cost optimization with strict security boundaries enforced at every step.
 
+Akili is moving beyond the “AI assistant” category; it’s shaping up to be a policy-enforced AI runtime built specifically for DevOps, SRE, and platform teams.
+
+Akili is built on one principle:
+
+AI should not just be powerful, it should be controlled, auditable, and production-safe.
+
+> We’re moving from AI as tools to AI as trusted operators, and trust starts with security.
 
 <p align="center">
-  <img src="logo.png" width="250" alt="Akili logo">
+  <img src="https://raw.githubusercontent.com/jkaninda/akili/main/logo.png" width="300" alt="Akili logo">
 </p>
 
 **Core principle: Default Deny. Explicit Allow. Always Auditable.**
 
+[![Test](https://github.com/jkaninda/akili/actions/workflows/test.yml/badge.svg)](https://github.com/jkaninda/akili/actions/workflows/test.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/jkaninda/akili)](https://goreportcard.com/report/github.com/jkaninda/akili)
+[![Go](https://img.shields.io/github/go-mod/go-version/jkaninda/akili)](https://go.dev/)
+[![Go Reference](https://pkg.go.dev/badge/github.com/jkaninda/akili.svg)](https://pkg.go.dev/github.com/jkaninda/akili)
+[![GitHub Release](https://img.shields.io/github/v/release/jkaninda/akili)](https://github.com/jkaninda/akili/releases)
+![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/jkaninda/akili?style=flat-square)
+![Docker Pulls](https://img.shields.io/docker/pulls/jkaninda/akili?style=flat-square)
+
 ## Architecture
 
-<img src="architecture.png" width="912" alt="Akili architecture">
+<img src="https://raw.githubusercontent.com/jkaninda/akili/main/architecture.png" width="912" alt="Akili architecture">
 
 ## Features
 
@@ -110,6 +125,12 @@ sequenceDiagram
 | MCP | `mcp__<server>__<tool>` | Configurable | Tools from external MCP servers |
 
 Every tool declares its required security action and risk level. The orchestrator enforces RBAC, approval, and budget checks before any tool executes.
+
+## Links
+
+- **Source Code**: [akili](https://github.com/jkaninda/akili)
+- **Docker Image**: [jkaninda/akili](https://hub.docker.com/r/jkaninda/akili)
+- **Akili Runtime**: [jkaninda/akili-runtime](https://hub.docker.com/r/jkaninda/akili-runtime)
 
 ## Quick Start
 
@@ -1482,7 +1503,7 @@ akili/
 │   ├── shared.go           # Shared component initialization
 │   ├── onboarding.go       # Interactive setup wizard
 │   └── version.go          # Version command
-├── pkg/
+├── internal/
 │   ├── agent/              # Agent interface, orchestrator, conversation memory, WebSocket client
 │   ├── alerting/           # Alert checker engine (poll, evaluate, dispatch)
 │   ├── approval/           # Approval workflow management (in-memory + DB)

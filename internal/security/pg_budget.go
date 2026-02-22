@@ -11,10 +11,10 @@ import (
 // PGBudgetManager adapts a BudgetStore to the budgetEnforcer interface
 // expected by the security Manager.
 type PGBudgetManager struct {
-	store       BudgetStore
-	orgID       uuid.UUID
+	store        BudgetStore
+	orgID        uuid.UUID
 	defaultLimit float64
-	logger      *slog.Logger
+	logger       *slog.Logger
 }
 
 // NewPGBudgetManager creates a postgres-backed budget manager.

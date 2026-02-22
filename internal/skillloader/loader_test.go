@@ -22,13 +22,15 @@ type stubTool struct {
 	name string
 }
 
-func (t *stubTool) Name() string                                                       { return t.name }
-func (t *stubTool) Description() string                                                { return "stub" }
-func (t *stubTool) InputSchema() map[string]any                                        { return map[string]any{"type": "object"} }
-func (t *stubTool) RequiredAction() security.Action                                    { return security.Action{} }
-func (t *stubTool) EstimateCost(_ map[string]any) float64                              { return 0 }
-func (t *stubTool) Validate(_ map[string]any) error                                    { return nil }
-func (t *stubTool) Execute(_ context.Context, _ map[string]any) (*tools.Result, error) { return nil, nil }
+func (t *stubTool) Name() string                          { return t.name }
+func (t *stubTool) Description() string                   { return "stub" }
+func (t *stubTool) InputSchema() map[string]any           { return map[string]any{"type": "object"} }
+func (t *stubTool) RequiredAction() security.Action       { return security.Action{} }
+func (t *stubTool) EstimateCost(_ map[string]any) float64 { return 0 }
+func (t *stubTool) Validate(_ map[string]any) error       { return nil }
+func (t *stubTool) Execute(_ context.Context, _ map[string]any) (*tools.Result, error) {
+	return nil, nil
+}
 
 func testRegistry() *tools.Registry {
 	reg := tools.NewRegistry()

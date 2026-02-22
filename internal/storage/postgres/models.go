@@ -10,9 +10,9 @@ import (
 
 // OrgModel maps to the "organizations" table.
 type OrgModel struct {
-	ID        uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	Name      string         `gorm:"not null;uniqueIndex"`
-	Slug      string         `gorm:"not null;uniqueIndex"`
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey"`
+	Name      string    `gorm:"not null;uniqueIndex"`
+	Slug      string    `gorm:"not null;uniqueIndex"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
@@ -22,9 +22,9 @@ func (OrgModel) TableName() string { return "organizations" }
 
 // UserModel maps to the "users" table.
 type UserModel struct {
-	ID         uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	OrgID      uuid.UUID      `gorm:"type:uuid;not null;index"`
-	ExternalID string         `gorm:"not null"`
+	ID         uuid.UUID `gorm:"type:uuid;primaryKey"`
+	OrgID      uuid.UUID `gorm:"type:uuid;not null;index"`
+	ExternalID string    `gorm:"not null"`
 	Email      string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
@@ -80,10 +80,10 @@ func (BudgetModel) TableName() string { return "budgets" }
 
 // BudgetReservationModel maps to the "budget_reservations" table.
 type BudgetReservationModel struct {
-	ID            uuid.UUID  `gorm:"type:uuid;primaryKey"`
-	OrgID         uuid.UUID  `gorm:"type:uuid;not null"`
-	BudgetID      uuid.UUID  `gorm:"type:uuid;not null;index"`
-	AmountUSD     float64    `gorm:"type:numeric(14,6);not null"`
+	ID            uuid.UUID `gorm:"type:uuid;primaryKey"`
+	OrgID         uuid.UUID `gorm:"type:uuid;not null"`
+	BudgetID      uuid.UUID `gorm:"type:uuid;not null;index"`
+	AmountUSD     float64   `gorm:"type:numeric(14,6);not null"`
 	CorrelationID string
 	CreatedAt     time.Time
 	ReleasedAt    *time.Time // NULL = active reservation
@@ -97,22 +97,22 @@ type JSONB json.RawMessage
 
 // ApprovalModel maps to the "approvals" table.
 type ApprovalModel struct {
-	ID            string     `gorm:"primaryKey"`
-	OrgID         uuid.UUID  `gorm:"type:uuid;not null;index"`
-	UserID        string     `gorm:"not null"`
-	ToolName      string     `gorm:"not null"`
-	Parameters    JSONB      `gorm:"type:jsonb;not null;default:'{}'"`
-	ActionName    string     `gorm:"not null"`
-	RiskLevel     string     `gorm:"not null"`
-	EstimatedCost  float64    `gorm:"type:numeric(14,6)"`
+	ID             string    `gorm:"primaryKey"`
+	OrgID          uuid.UUID `gorm:"type:uuid;not null;index"`
+	UserID         string    `gorm:"not null"`
+	ToolName       string    `gorm:"not null"`
+	Parameters     JSONB     `gorm:"type:jsonb;not null;default:'{}'"`
+	ActionName     string    `gorm:"not null"`
+	RiskLevel      string    `gorm:"not null"`
+	EstimatedCost  float64   `gorm:"type:numeric(14,6)"`
 	CorrelationID  string
 	ConversationID string // Conversation to update after execution.
 	ToolUseID      string // LLM tool_use block ID for updating the pending tool_result.
-	Status         int16      `gorm:"not null;default:0"`
-	ApprovedBy    string
-	CreatedAt     time.Time
-	ExpiresAt     time.Time  `gorm:"index"`
-	ResolvedAt    *time.Time
+	Status         int16  `gorm:"not null;default:0"`
+	ApprovedBy     string
+	CreatedAt      time.Time
+	ExpiresAt      time.Time `gorm:"index"`
+	ResolvedAt     *time.Time
 }
 
 func (ApprovalModel) TableName() string { return "approvals" }
@@ -129,7 +129,7 @@ type AuditEventModel struct {
 	Parameters    JSONB     `gorm:"type:jsonb;not null;default:'{}'"`
 	Result        string    `gorm:"not null"`
 	TokensUsed    int
-	CostUSD       float64   `gorm:"type:numeric(14,6)"`
+	CostUSD       float64 `gorm:"type:numeric(14,6)"`
 	ApprovedBy    string
 	Error         string
 	CreatedAt     time.Time `gorm:"index"`
@@ -235,21 +235,21 @@ func (AgentSkillModel) TableName() string { return "agent_skills" }
 
 // CronJobModel maps to the "cron_jobs" table.
 type CronJobModel struct {
-	ID             uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	OrgID          uuid.UUID      `gorm:"type:uuid;not null;index"`
-	Name           string         `gorm:"not null"`
-	Description    string         `gorm:"type:text"`
-	CronExpression string         `gorm:"not null"`
-	Goal           string         `gorm:"type:text;not null"`
-	UserID         string         `gorm:"not null"`
-	BudgetLimitUSD float64        `gorm:"type:numeric(14,6);not null;default:0"`
-	MaxDepth       int            `gorm:"not null;default:5"`
-	MaxTasks       int            `gorm:"not null;default:50"`
-	Enabled        bool           `gorm:"not null;default:true"`
-	NextRunAt      *time.Time     `gorm:"index"`
+	ID             uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	OrgID          uuid.UUID  `gorm:"type:uuid;not null;index"`
+	Name           string     `gorm:"not null"`
+	Description    string     `gorm:"type:text"`
+	CronExpression string     `gorm:"not null"`
+	Goal           string     `gorm:"type:text;not null"`
+	UserID         string     `gorm:"not null"`
+	BudgetLimitUSD float64    `gorm:"type:numeric(14,6);not null;default:0"`
+	MaxDepth       int        `gorm:"not null;default:5"`
+	MaxTasks       int        `gorm:"not null;default:50"`
+	Enabled        bool       `gorm:"not null;default:true"`
+	NextRunAt      *time.Time `gorm:"index"`
 	LastRunAt      *time.Time
-	LastWorkflowID *uuid.UUID     `gorm:"type:uuid"`
-	LastError      string         `gorm:"type:text"`
+	LastWorkflowID *uuid.UUID `gorm:"type:uuid"`
+	LastError      string     `gorm:"type:text"`
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	DeletedAt      gorm.DeletedAt `gorm:"index"`
@@ -259,18 +259,18 @@ func (CronJobModel) TableName() string { return "cron_jobs" }
 
 // InfraNodeModel maps to the "infra_nodes" table.
 type InfraNodeModel struct {
-	ID            uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	OrgID         uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:idx_infra_org_name"`
-	Name          string         `gorm:"not null;uniqueIndex:idx_infra_org_name"`
-	Aliases       JSONB          `gorm:"type:jsonb;not null;default:'[]'"`
-	NodeType      string         `gorm:"not null"`
-	Host          string         `gorm:"not null"`
-	Port          int            `gorm:"not null;default:0"`
-	User          string         `gorm:"not null;default:''"`
-	CredentialRef string         `gorm:"not null;default:''"`
-	Tags          JSONB          `gorm:"type:jsonb;not null;default:'{}'"`
-	MCPServer     string         `gorm:"not null;default:''"`
-	Enabled       bool           `gorm:"not null;default:true"`
+	ID            uuid.UUID `gorm:"type:uuid;primaryKey"`
+	OrgID         uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_infra_org_name"`
+	Name          string    `gorm:"not null;uniqueIndex:idx_infra_org_name"`
+	Aliases       JSONB     `gorm:"type:jsonb;not null;default:'[]'"`
+	NodeType      string    `gorm:"not null"`
+	Host          string    `gorm:"not null"`
+	Port          int       `gorm:"not null;default:0"`
+	User          string    `gorm:"not null;default:''"`
+	CredentialRef string    `gorm:"not null;default:''"`
+	Tags          JSONB     `gorm:"type:jsonb;not null;default:'{}'"`
+	MCPServer     string    `gorm:"not null;default:''"`
+	Enabled       bool      `gorm:"not null;default:true"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	DeletedAt     gorm.DeletedAt `gorm:"index"`
@@ -306,13 +306,13 @@ func (ConversationMessageModel) TableName() string { return "conversation_messag
 
 // NotificationChannelModel maps to the "notification_channels" table.
 type NotificationChannelModel struct {
-	ID            uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	OrgID         uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:idx_notif_ch_org_name"`
-	Name          string         `gorm:"not null;uniqueIndex:idx_notif_ch_org_name"`
-	ChannelType   string         `gorm:"not null"`
-	Config        JSONB          `gorm:"type:jsonb;not null;default:'{}'"`
-	CredentialRef string         `gorm:"not null;default:''"`
-	Enabled       bool           `gorm:"not null;default:true"`
+	ID            uuid.UUID `gorm:"type:uuid;primaryKey"`
+	OrgID         uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_notif_ch_org_name"`
+	Name          string    `gorm:"not null;uniqueIndex:idx_notif_ch_org_name"`
+	ChannelType   string    `gorm:"not null"`
+	Config        JSONB     `gorm:"type:jsonb;not null;default:'{}'"`
+	CredentialRef string    `gorm:"not null;default:''"`
+	Enabled       bool      `gorm:"not null;default:true"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	DeletedAt     gorm.DeletedAt `gorm:"index"`
@@ -322,22 +322,22 @@ func (NotificationChannelModel) TableName() string { return "notification_channe
 
 // AlertRuleModel maps to the "alert_rules" table.
 type AlertRuleModel struct {
-	ID             uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	OrgID          uuid.UUID      `gorm:"type:uuid;not null;index"`
-	Name           string         `gorm:"not null"`
-	Description    string         `gorm:"type:text"`
-	Target         string         `gorm:"not null"`
-	CheckType      string         `gorm:"not null"`
-	CheckConfig    JSONB          `gorm:"type:jsonb;not null;default:'{}'"`
-	CronExpression string         `gorm:"not null"`
-	ChannelIDs     JSONB          `gorm:"type:jsonb;not null;default:'[]'"`
-	UserID         string         `gorm:"not null"`
-	Enabled        bool           `gorm:"not null;default:true"`
-	CooldownS      int            `gorm:"not null;default:300"`
+	ID             uuid.UUID `gorm:"type:uuid;primaryKey"`
+	OrgID          uuid.UUID `gorm:"type:uuid;not null;index"`
+	Name           string    `gorm:"not null"`
+	Description    string    `gorm:"type:text"`
+	Target         string    `gorm:"not null"`
+	CheckType      string    `gorm:"not null"`
+	CheckConfig    JSONB     `gorm:"type:jsonb;not null;default:'{}'"`
+	CronExpression string    `gorm:"not null"`
+	ChannelIDs     JSONB     `gorm:"type:jsonb;not null;default:'[]'"`
+	UserID         string    `gorm:"not null"`
+	Enabled        bool      `gorm:"not null;default:true"`
+	CooldownS      int       `gorm:"not null;default:300"`
 	LastCheckedAt  *time.Time
 	LastAlertedAt  *time.Time
-	LastStatus     string         `gorm:"not null;default:'ok'"`
-	NextRunAt      *time.Time     `gorm:"index"`
+	LastStatus     string     `gorm:"not null;default:'ok'"`
+	NextRunAt      *time.Time `gorm:"index"`
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	DeletedAt      gorm.DeletedAt `gorm:"index"`
@@ -364,16 +364,16 @@ func (AlertHistoryModel) TableName() string { return "alert_history" }
 
 // AgentIdentityModel maps to the "agent_identities" table.
 type AgentIdentityModel struct {
-	ID               uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	AgentID          string         `gorm:"not null;uniqueIndex"`
-	Name             string         `gorm:"not null"`
-	Version          string         `gorm:"not null"`
-	PublicKey        string         `gorm:"not null"`
-	Capabilities     JSONB          `gorm:"type:jsonb;not null;default:'[]'"`
-	TrustLevel       string         `gorm:"not null;default:'untrusted'"`
-	EnvironmentScope string         `gorm:"not null;default:''"`
-	LastHeartbeatAt  *time.Time     `gorm:"index"`
-	Status           string         `gorm:"not null;default:'offline'"`
+	ID               uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	AgentID          string     `gorm:"not null;uniqueIndex"`
+	Name             string     `gorm:"not null"`
+	Version          string     `gorm:"not null"`
+	PublicKey        string     `gorm:"not null"`
+	Capabilities     JSONB      `gorm:"type:jsonb;not null;default:'[]'"`
+	TrustLevel       string     `gorm:"not null;default:'untrusted'"`
+	EnvironmentScope string     `gorm:"not null;default:''"`
+	LastHeartbeatAt  *time.Time `gorm:"index"`
+	Status           string     `gorm:"not null;default:'offline'"`
 	RegisteredAt     time.Time
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
@@ -401,23 +401,23 @@ func (AgentHeartbeatModel) TableName() string { return "agent_heartbeats" }
 
 // HeartbeatTaskModel maps to the "heartbeat_tasks" table.
 type HeartbeatTaskModel struct {
-	ID                     uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	OrgID                  uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:idx_hbt_org_group_name"`
-	Name                   string         `gorm:"not null;uniqueIndex:idx_hbt_org_group_name"`
-	Description            string         `gorm:"type:text"`
-	SourceFile             string         `gorm:"not null;default:''"`
-	FileGroup              string         `gorm:"not null;default:'';uniqueIndex:idx_hbt_org_group_name"`
-	CronExpression         string         `gorm:"not null"`
-	Mode                   string         `gorm:"not null;default:'quick'"`
-	UserID                 string         `gorm:"not null"`
-	BudgetLimitUSD         float64        `gorm:"type:numeric(14,6);not null;default:0.5"`
-	NotificationChannelIDs JSONB          `gorm:"type:jsonb;not null;default:'[]'"`
-	Enabled                bool           `gorm:"not null;default:true"`
-	NextRunAt              *time.Time     `gorm:"index"`
+	ID                     uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	OrgID                  uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_hbt_org_group_name"`
+	Name                   string     `gorm:"not null;uniqueIndex:idx_hbt_org_group_name"`
+	Description            string     `gorm:"type:text"`
+	SourceFile             string     `gorm:"not null;default:''"`
+	FileGroup              string     `gorm:"not null;default:'';uniqueIndex:idx_hbt_org_group_name"`
+	CronExpression         string     `gorm:"not null"`
+	Mode                   string     `gorm:"not null;default:'quick'"`
+	UserID                 string     `gorm:"not null"`
+	BudgetLimitUSD         float64    `gorm:"type:numeric(14,6);not null;default:0.5"`
+	NotificationChannelIDs JSONB      `gorm:"type:jsonb;not null;default:'[]'"`
+	Enabled                bool       `gorm:"not null;default:true"`
+	NextRunAt              *time.Time `gorm:"index"`
 	LastRunAt              *time.Time
-	LastStatus             string         `gorm:"not null;default:''"`
-	LastError              string         `gorm:"type:text"`
-	LastResultSummary      string         `gorm:"type:text"`
+	LastStatus             string `gorm:"not null;default:''"`
+	LastError              string `gorm:"type:text"`
+	LastResultSummary      string `gorm:"type:text"`
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
 	DeletedAt              gorm.DeletedAt `gorm:"index"`

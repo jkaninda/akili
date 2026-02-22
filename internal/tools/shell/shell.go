@@ -27,7 +27,7 @@ func NewTool(sbx sandbox.Sandbox, logger *slog.Logger) *Tool {
 	}
 }
 
-func (t *Tool) Name() string       { return "shell_exec" }
+func (t *Tool) Name() string        { return "shell_exec" }
 func (t *Tool) Description() string { return "Execute a shell command in a sandboxed environment" }
 func (t *Tool) InputSchema() map[string]any {
 	return map[string]any{

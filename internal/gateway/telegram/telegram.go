@@ -43,12 +43,12 @@ const (
 
 // Config configures the Telegram gateway.
 type Config struct {
-	BotToken       string            // From TELEGRAM_BOT_TOKEN env var.
-	WebhookURL     string            // If set, use webhook mode. If empty, use long polling.
-	ListenAddr     string            // For webhook mode.
-	AllowedUsers   []int64           // Telegram user IDs allowed to interact. Empty = deny all.
-	UserMapping    map[string]string // Telegram user ID (string) → Akili user ID.
-	PollTimeout    int               // Long poll timeout in seconds. 0 = 30s default.
+	BotToken     string            // From TELEGRAM_BOT_TOKEN env var.
+	WebhookURL   string            // If set, use webhook mode. If empty, use long polling.
+	ListenAddr   string            // For webhook mode.
+	AllowedUsers []int64           // Telegram user IDs allowed to interact. Empty = deny all.
+	UserMapping  map[string]string // Telegram user ID (string) → Akili user ID.
+	PollTimeout  int               // Long poll timeout in seconds. 0 = 30s default.
 }
 
 // Gateway is the Telegram gateway.
@@ -191,7 +191,7 @@ func (g *Gateway) startWebhook(ctx context.Context) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      10 * time.Second,
-		BaseContext:        func(_ net.Listener) context.Context { return ctx },
+		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 	}
 
 	g.logger.Info("telegram gateway starting webhook",

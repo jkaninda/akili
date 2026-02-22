@@ -90,9 +90,9 @@ type AgentInput struct {
 
 // AgentOutput is the result from a role-scoped agent invocation.
 type AgentOutput struct {
-	Response     string         // The agent's textual response.
-	SubTasks     []TaskSpec     // Tasks to spawn (planner/orchestrator roles).
-	ToolRequests []ToolSpec     // Tools to invoke (executor role).
+	Response     string     // The agent's textual response.
+	SubTasks     []TaskSpec // Tasks to spawn (planner/orchestrator roles).
+	ToolRequests []ToolSpec // Tools to invoke (executor role).
 	TokensUsed   int
 	CostUSD      float64
 	Metadata     map[string]any

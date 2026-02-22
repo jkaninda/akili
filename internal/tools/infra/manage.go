@@ -134,14 +134,14 @@ func (t *ManageTool) Execute(ctx context.Context, params map[string]any) (*tools
 
 func (t *ManageTool) executeAdd(ctx context.Context, params map[string]any) (*tools.Result, error) {
 	node := &domain.InfraNode{
-		ID:            uuid.New(),
-		OrgID:         t.orgID,
-		Name:          params["name"].(string),
-		NodeType:      params["node_type"].(string),
-		Host:          params["host"].(string),
-		Enabled:       true,
-		CreatedAt:     time.Now().UTC(),
-		UpdatedAt:     time.Now().UTC(),
+		ID:        uuid.New(),
+		OrgID:     t.orgID,
+		Name:      params["name"].(string),
+		NodeType:  params["node_type"].(string),
+		Host:      params["host"].(string),
+		Enabled:   true,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
 	}
 
 	if aliases, ok := params["aliases"].([]any); ok {

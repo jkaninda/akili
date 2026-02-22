@@ -19,10 +19,10 @@ import (
 
 // TaskPollerConfig configures the task file poller.
 type TaskPollerConfig struct {
-	TasksDirs   []string
+	TasksDirs    []string
 	PollInterval time.Duration
-	OrgID       uuid.UUID
-	DefaultUser string
+	OrgID        uuid.UUID
+	DefaultUser  string
 }
 
 // fileState tracks a file's hash for change detection.

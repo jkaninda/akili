@@ -40,7 +40,7 @@ type TaskStatus string
 
 const (
 	TaskPending   TaskStatus = "pending"
-	TaskBlocked   TaskStatus = "blocked"   // Waiting on dependencies.
+	TaskBlocked   TaskStatus = "blocked" // Waiting on dependencies.
 	TaskRunning   TaskStatus = "running"
 	TaskCompleted TaskStatus = "completed"
 	TaskFailed    TaskStatus = "failed"
@@ -59,14 +59,14 @@ const (
 type MessageType string
 
 const (
-	MsgTaskAssignment  MessageType = "task_assignment"   // Orchestrator -> agent.
-	MsgTaskResult      MessageType = "task_result"       // Agent -> orchestrator.
-	MsgInfoRequest     MessageType = "info_request"      // Any -> researcher.
-	MsgInfoResponse    MessageType = "info_response"     // Researcher -> requester.
-	MsgComplianceCheck MessageType = "compliance_check"  // Executor -> compliance.
+	MsgTaskAssignment   MessageType = "task_assignment"   // Orchestrator -> agent.
+	MsgTaskResult       MessageType = "task_result"       // Agent -> orchestrator.
+	MsgInfoRequest      MessageType = "info_request"      // Any -> researcher.
+	MsgInfoResponse     MessageType = "info_response"     // Researcher -> requester.
+	MsgComplianceCheck  MessageType = "compliance_check"  // Executor -> compliance.
 	MsgComplianceResult MessageType = "compliance_result" // Compliance -> executor.
-	MsgPlanProposal    MessageType = "plan_proposal"     // Planner -> orchestrator.
-	MsgError           MessageType = "error"
+	MsgPlanProposal     MessageType = "plan_proposal"     // Planner -> orchestrator.
+	MsgError            MessageType = "error"
 )
 
 // Workflow is the top-level unit of multi-agent work.
@@ -144,7 +144,7 @@ type TaskSpec struct {
 	AgentRole   AgentRole `json:"agent_role"`
 	Description string    `json:"description"`
 	Input       string    `json:"input"`
-	Mode        TaskMode  `json:"mode,omitempty"` // Default: sequential.
+	Mode        TaskMode  `json:"mode,omitempty"`       // Default: sequential.
 	DependsOn   []int     `json:"depends_on,omitempty"` // Indices into the same []TaskSpec slice.
 	Priority    int       `json:"priority,omitempty"`
 }

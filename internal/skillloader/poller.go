@@ -36,11 +36,11 @@ type fileState struct {
 // Detects new files, modified files (hash change), and removed files.
 // Thread-safe: can be queried for active skills from other goroutines.
 type SkillPoller struct {
-	config       SkillPollerConfig
-	loader       *Loader
-	store        orchestrator.SkillStore
-	metrics      *orchestrator.SkillMetrics
-	logger       *slog.Logger
+	config  SkillPollerConfig
+	loader  *Loader
+	store   orchestrator.SkillStore
+	metrics *orchestrator.SkillMetrics
+	logger  *slog.Logger
 
 	mu           sync.RWMutex
 	activeSkills map[string]*SkillDefinition // skill_key → definition

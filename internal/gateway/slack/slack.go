@@ -86,7 +86,7 @@ func (g *Gateway) Start(ctx context.Context) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      10 * time.Second,
-		BaseContext:        func(_ net.Listener) context.Context { return ctx },
+		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 	}
 
 	g.logger.Info("slack gateway starting", slog.String("addr", g.config.ListenAddr))

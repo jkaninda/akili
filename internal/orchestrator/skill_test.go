@@ -129,14 +129,14 @@ func TestComputeMaturity(t *testing.T) {
 		want        SkillMaturity
 	}{
 		{0, 0, SkillBasic},
-		{5, 1.0, SkillBasic},            // <10 completions.
-		{10, 0.70, SkillProven},          // Exactly threshold.
-		{10, 0.69, SkillBasic},           // Just below threshold.
-		{50, 0.85, SkillTrusted},         // Exactly threshold.
-		{50, 0.84, SkillProven},          // Below trusted but above proven.
-		{100, 0.95, SkillOptimized},      // Exactly threshold.
-		{100, 0.94, SkillTrusted},        // Below optimized.
-		{200, 1.0, SkillOptimized},       // Well above threshold.
+		{5, 1.0, SkillBasic},        // <10 completions.
+		{10, 0.70, SkillProven},     // Exactly threshold.
+		{10, 0.69, SkillBasic},      // Just below threshold.
+		{50, 0.85, SkillTrusted},    // Exactly threshold.
+		{50, 0.84, SkillProven},     // Below trusted but above proven.
+		{100, 0.95, SkillOptimized}, // Exactly threshold.
+		{100, 0.94, SkillTrusted},   // Below optimized.
+		{200, 1.0, SkillOptimized},  // Well above threshold.
 	}
 
 	for _, tt := range tests {

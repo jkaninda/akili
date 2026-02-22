@@ -15,9 +15,9 @@ type SkillMaturity string
 
 const (
 	SkillBasic     SkillMaturity = "basic"     // <10 completions.
-	SkillProven    SkillMaturity = "proven"     // ≥10 completions, reliability ≥0.70.
-	SkillTrusted   SkillMaturity = "trusted"    // ≥50 completions, reliability ≥0.85.
-	SkillOptimized SkillMaturity = "optimized"  // ≥100 completions, reliability ≥0.95.
+	SkillProven    SkillMaturity = "proven"    // ≥10 completions, reliability ≥0.70.
+	SkillTrusted   SkillMaturity = "trusted"   // ≥50 completions, reliability ≥0.85.
+	SkillOptimized SkillMaturity = "optimized" // ≥100 completions, reliability ≥0.95.
 )
 
 // maturityRank returns a numeric rank for ordering (higher = more mature).
@@ -351,4 +351,3 @@ func SkillKeyForTask(task *Task) string {
 func ComputeMaturity(totalCompletions int, reliability float64) SkillMaturity {
 	return computeMaturity(totalCompletions, reliability)
 }
-

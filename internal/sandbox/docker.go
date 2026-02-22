@@ -184,16 +184,16 @@ func (s *DockerSandbox) buildDockerArgs(name string, memoryMB int, req Execution
 		"--name", name,
 
 		// --- Security hardening ---
-		"--cap-drop=ALL",                        // Drop all 38+ Linux capabilities.
-		"--security-opt=no-new-privileges",      // Block setuid/setgid escalation.
-		"--read-only",                           // Read-only root filesystem.
-		"--user=65534:65534",                    // Non-root (nobody).
+		"--cap-drop=ALL",                   // Drop all 38+ Linux capabilities.
+		"--security-opt=no-new-privileges", // Block setuid/setgid escalation.
+		"--read-only",                      // Read-only root filesystem.
+		"--user=65534:65534",               // Non-root (nobody).
 
 		// --- Resource limits ---
-		"--memory=" + memoryFlag,                // Hard memory limit.
-		"--memory-swap=" + memoryFlag,           // Same as memory = disable swap (OOM kill).
-		"--cpus=" + cpuFlag,                     // CPU rate limit.
-		"--pids-limit=" + pidsFlag,              // Fork bomb protection.
+		"--memory=" + memoryFlag,      // Hard memory limit.
+		"--memory-swap=" + memoryFlag, // Same as memory = disable swap (OOM kill).
+		"--cpus=" + cpuFlag,           // CPU rate limit.
+		"--pids-limit=" + pidsFlag,    // Fork bomb protection.
 
 		// --- Writable tmpfs for working directories ---
 		"--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",

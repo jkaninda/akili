@@ -306,10 +306,10 @@ func (c *Client) StreamMessage(ctx context.Context, req *llm.Request, events cha
 
 // apiStreamEvent represents a single event in the Anthropic streaming response.
 type apiStreamEvent struct {
-	Type         string             `json:"type"`
-	ContentBlock *apiContentBlock   `json:"content_block,omitempty"`
-	Delta        *apiStreamDelta    `json:"delta,omitempty"`
-	Index        int                `json:"index,omitempty"`
+	Type         string           `json:"type"`
+	ContentBlock *apiContentBlock `json:"content_block,omitempty"`
+	Delta        *apiStreamDelta  `json:"delta,omitempty"`
+	Index        int              `json:"index,omitempty"`
 }
 
 // apiStreamDelta represents a delta update in a streaming response.

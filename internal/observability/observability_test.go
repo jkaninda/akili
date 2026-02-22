@@ -244,10 +244,10 @@ func TestAnomalyDetector_ErrorRateThreshold(t *testing.T) {
 // --- InstrumentedProvider (wrapper) ---
 
 type mockProvider struct {
-	name    string
-	resp    *llm.Response
-	err     error
-	called  int
+	name   string
+	resp   *llm.Response
+	err    error
+	called int
 }
 
 func (m *mockProvider) Name() string { return m.name }
@@ -356,10 +356,10 @@ func TestInstrumentedSandbox_Success(t *testing.T) {
 // --- InstrumentedSecurityManager (wrapper) ---
 
 type mockSecurityManager struct {
-	permErr    error
+	permErr     error
 	approvalErr error
-	budgetErr  error
-	reserveErr error
+	budgetErr   error
+	reserveErr  error
 }
 
 func (m *mockSecurityManager) CheckPermission(ctx context.Context, userID string, action security.Action) error {

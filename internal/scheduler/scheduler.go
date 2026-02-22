@@ -55,8 +55,8 @@ type Scheduler struct {
 	orgID        uuid.UUID
 
 	// Optional notification on job failure.
-	dispatcher       *notification.Dispatcher
-	failChannelIDs   []uuid.UUID
+	dispatcher     *notification.Dispatcher
+	failChannelIDs []uuid.UUID
 
 	parser cron.Parser
 }
