@@ -1503,7 +1503,7 @@ akili/
 │   ├── shared.go           # Shared component initialization
 │   ├── onboarding.go       # Interactive setup wizard
 │   └── version.go          # Version command
-├── pkg/
+├── internal/
 │   ├── agent/              # Agent interface, orchestrator, conversation memory, WebSocket client
 │   ├── alerting/           # Alert checker engine (poll, evaluate, dispatch)
 │   ├── approval/           # Approval workflow management (in-memory + DB)
