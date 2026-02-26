@@ -91,6 +91,11 @@ func (w *Workspace) LogsDir() string {
 	return w.dir("logs")
 }
 
+// SoulDir returns <root>/soul/. Stores soul state files (SOUL.md).
+func (w *Workspace) SoulDir() string {
+	return w.dir("soul")
+}
+
 // --- Derived paths ---
 
 // ConfigPath returns <root>/config.json.
@@ -157,6 +162,7 @@ func (w *Workspace) EnsureAll() error {
 		w.SandboxDir(),
 		w.MCPDir(),
 		w.LogsDir(),
+		w.SoulDir(),
 	}
 	for _, d := range dirs {
 		if err := w.ensureDir(d, 0750); err != nil {

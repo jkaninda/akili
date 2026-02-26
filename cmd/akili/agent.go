@@ -18,7 +18,6 @@ import (
 	"github.com/jkaninda/akili/internal/orchestrator"
 	"github.com/jkaninda/akili/internal/protocol"
 	"github.com/jkaninda/akili/internal/skillloader"
-	goutils "github.com/jkaninda/go-utils"
 )
 
 var (
@@ -50,15 +49,25 @@ func init() {
 }
 
 // runAgent starts Akili in agent mode.
-func runAgent(_ *cobra.Command, _ []string) error {
+func runAgent(cmd *cobra.Command, _ []string) error {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 
-	cfg, err := config.Load(goutils.Env("AKILI_CONFIG", agentConfigPath))
+	// Resolve config path: explicit --config flag takes priority over AKILI_CONFIG env var.
+	configPath := agentConfigPath
+	if !cmd.Flags().Changed("config") {
+		if envCfg := os.Getenv("AKILI_CONFIG"); envCfg != "" {
+			configPath = envCfg
+		}
+	}
+
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
+
+	logger.Info("config loaded", slog.String("path", configPath))
 
 	// Force agent mode.
 	if cfg.Runtime == nil {
@@ -91,6 +100,12 @@ func runAgent(_ *cobra.Command, _ []string) error {
 
 	agentCfg := cfg.Runtime.Agent
 
+	logger.Info("agent mode resolved",
+		slog.String("agent_id", agentCfg.AgentID),
+		slog.String("gateway_url", agentCfg.GatewayURL),
+		slog.Bool("websocket_mode", agentCfg.UseWebSocket()),
+	)
+
 	// Choose mode: WebSocket or legacy DB polling.
 	if agentCfg.UseWebSocket() {
 		return runAgentWebSocket(cfg, agentCfg, logger)
@@ -111,7 +126,9 @@ func runAgentWebSocket(cfg *config.Config, agentCfg *config.AgentConfig, logger 
 		slog.String("gateway_url", agentCfg.GatewayURL),
 	)
 
-	sc, err := initShared(cfg, logger)
+	// WebSocket agents do not need database access — all persistence
+	// and authoritative security enforcement happens on the gateway side.
+	sc, err := initSharedForWSAgent(cfg, logger)
 	if err != nil {
 		return err
 	}

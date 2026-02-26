@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/jkaninda/akili/internal/llm"
 	"github.com/jkaninda/akili/internal/sandbox"
 	"github.com/jkaninda/akili/internal/security"
+	"github.com/jkaninda/okapi"
 )
 
 // --- No-op Path ---
@@ -413,17 +413,18 @@ func TestInstrumentedSecurityManager_RecordCost(t *testing.T) {
 
 // --- HTTP Middleware ---
 
-func TestHTTPMetricsMiddleware(t *testing.T) {
+func TestMetricsMiddleware(t *testing.T) {
 	metrics := NewMetricsCollector()
 
-	handler := HTTPMetricsMiddleware(metrics, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
-	}))
+	mw := MetricsMiddleware(metrics, nil)
+	handler := mw(func(c *okapi.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	ctx, rec := okapi.NewTestContext("GET", "/test", nil)
+	if err := handler(ctx); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)
@@ -435,15 +436,17 @@ func TestHTTPMetricsMiddleware(t *testing.T) {
 	}
 }
 
-func TestHTTPMetricsMiddleware_NilMetrics(t *testing.T) {
+func TestMetricsMiddleware_NilMetrics(t *testing.T) {
 	// Should not panic with nil metrics.
-	handler := HTTPMetricsMiddleware(nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+	mw := MetricsMiddleware(nil, nil)
+	handler := mw(func(c *okapi.Context) error {
+		return c.String(http.StatusOK, "")
+	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
+	ctx, rec := okapi.NewTestContext("GET", "/test", nil)
+	if err := handler(ctx); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)

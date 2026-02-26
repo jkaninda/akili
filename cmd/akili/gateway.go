@@ -108,8 +108,12 @@ func runGateway(_ *cobra.Command, _ []string) error {
 	if cfg.Gateways.WebSocket != nil && cfg.Gateways.WebSocket.Enabled {
 		registry := agent.NewRegistry(logger)
 		wsServer = ws.NewServer(registry, cfg.Gateways.WebSocket, logger)
-		logger.Debug("websocket server initialized",
+		go wsServer.RunStaleChecker(ctx)
+		go wsServer.RunAckChecker(ctx)
+		logger.Info("websocket server initialized for remote agents",
 			slog.String("path", cfg.Gateways.WebSocket.WSPath()),
+			slog.String("ack_timeout", cfg.Gateways.WebSocket.WSAckTimeout().String()),
+			slog.String("stale_timeout", cfg.Gateways.WebSocket.WSStaleTimeout().String()),
 		)
 	}
 
@@ -265,6 +269,34 @@ func runGateway(_ *cobra.Command, _ []string) error {
 		)
 	}
 
+	// Wrap the embedded agent with a RoutingAgent that routes to remote
+	// WebSocket agents when available, falling back to the embedded agent.
+	embEnabled := true
+	embFallback := true
+	if cfg.EmbeddedAgent != nil {
+		embEnabled = cfg.EmbeddedAgent.Enabled
+		embFallback = cfg.EmbeddedAgent.Fallback
+	}
+
+	var wsExecutor agent.WSTaskExecutor
+	if wsServer != nil {
+		wsExecutor = ws.NewAgentRouterAdapter(wsServer)
+	}
+
+	routingAgent := agent.NewRoutingAgent(sc.AgentCore, wsExecutor, agent.RoutingAgentConfig{
+		EmbeddedEnabled:  embEnabled,
+		EmbeddedFallback: embFallback,
+		BudgetUSD:        cfg.Budget.DefaultLimitUSD,
+		TaskTimeout:      5 * time.Minute,
+	}, logger)
+	sc.AgentCore = routingAgent
+
+	logger.Info("agent routing configured",
+		slog.Bool("embedded_enabled", embEnabled),
+		slog.Bool("embedded_fallback", embFallback),
+		slog.Bool("websocket_enabled", wsServer != nil),
+	)
+
 	// Build enabled gateways.
 	gateways := buildGateways(cfg, sc, wsServer, workflowEngine, cronStore, cronOrgID, alertStore, historyStore, channelStore)
 	if len(gateways) == 0 {
@@ -294,6 +326,11 @@ func runGateway(_ *cobra.Command, _ []string) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// Close all WebSocket agent connections first.
+	if wsServer != nil {
+		wsServer.Shutdown(shutdownCtx)
+	}
+
 	for i := len(gateways) - 1; i >= 0; i-- {
 		if err := gateways[i].Stop(shutdownCtx); err != nil {
 			logger.Error("stopping gateway", slog.String("error", err.Error()))
@@ -315,6 +352,9 @@ func buildWorkflowEngine(ctx context.Context, cfg *config.Config, sc *SharedComp
 	factory := orchestrator.NewDefaultAgentFactory(
 		sc.LLMProvider, sc.Security, sc.ApprovalMgr, sc.Obs, sc.ToolReg, sc.Logger,
 	)
+	if cfg.Orchestrator.Recovery != nil && len(cfg.Orchestrator.Recovery.AllowedTools) > 0 {
+		factory.WithRecoveryTools(cfg.Orchestrator.Recovery.AllowedTools)
+	}
 
 	engineCfg := orchestrator.EngineConfig{
 		DefaultBudgetLimitUSD: cfg.Orchestrator.DefaultBudgetUSD,
@@ -322,6 +362,7 @@ func buildWorkflowEngine(ctx context.Context, cfg *config.Config, sc *SharedComp
 		DefaultMaxTasks:       cfg.Orchestrator.DefaultMaxTasks,
 		MaxConcurrentTasks:    cfg.Orchestrator.MaxConcurrentTasks,
 		TaskTimeout:           time.Duration(cfg.Orchestrator.TaskTimeoutSeconds) * time.Second,
+		Recovery:              cfg.Orchestrator.Recovery,
 	}
 
 	// Skill intelligence layer.
@@ -347,6 +388,9 @@ func buildWorkflowEngine(ctx context.Context, cfg *config.Config, sc *SharedComp
 						orch.WithSkillSummary(summary)
 					}
 					orch.WithRunbooks(defsToRunbooks(defs))
+					if compact := skillloader.RenderSkillSummaryCompact(defs); compact != "" {
+						orch.WithSkillSummaryCompact(compact)
+					}
 				}
 			}
 
@@ -397,6 +441,9 @@ func buildWorkflowEngine(ctx context.Context, cfg *config.Config, sc *SharedComp
 							)
 						}
 						orch.WithRunbooks(defsToRunbooks(defs))
+						if compact := skillloader.RenderSkillSummaryCompact(defs); compact != "" {
+							orch.WithSkillSummaryCompact(compact)
+						}
 					}
 				}
 			}
@@ -453,14 +500,14 @@ func buildGateways(cfg *config.Config, sc *SharedComponents, wsServer *ws.Server
 	// Default to CLI if no gateways section configured.
 	hasAnyGateway := gwCfg.CLI != nil || gwCfg.HTTP != nil || gwCfg.Slack != nil || gwCfg.Telegram != nil || gwCfg.Signal != nil || gwCfg.WebSocket != nil
 	if !hasAnyGateway {
-		gws = append(gws, cli.NewGateway(sc.AgentCore, sc.ApprovalMgr, sc.Logger))
+		gws = append(gws, cli.NewGateway(sc.AgentCore, sc.ApprovalMgr, sc.Security, "", sc.Logger))
 		sc.Logger.Debug("gateway enabled", slog.String("type", "cli"), slog.String("reason", "default"))
 		return gws
 	}
 
 	// CLI gateway.
 	if gwCfg.CLI != nil && gwCfg.CLI.Enabled {
-		gws = append(gws, cli.NewGateway(sc.AgentCore, sc.ApprovalMgr, sc.Logger))
+		gws = append(gws, cli.NewGateway(sc.AgentCore, sc.ApprovalMgr, sc.Security, gwCfg.CLI.CLIUserID(), sc.Logger))
 		sc.Logger.Debug("gateway enabled", slog.String("type", "cli"))
 	}
 
@@ -529,8 +576,10 @@ func buildGateways(cfg *config.Config, sc *SharedComponents, wsServer *ws.Server
 		if httpGW != nil {
 			// Mount on the HTTP gateway.
 			httpGW.WithHandler(wsPath, wsServer.Handler())
-			sc.Logger.Debug("websocket agent endpoint mounted on http gateway",
+			sc.Logger.Info("websocket agent endpoint mounted on http gateway",
 				slog.String("path", wsPath),
+				slog.String("listen_addr", gwCfg.HTTP.ListenAddr),
+				slog.String("agent_connect_url", fmt.Sprintf("ws://localhost%s%s", gwCfg.HTTP.ListenAddr, wsPath)),
 			)
 		} else {
 			// Start standalone WebSocket listener.
@@ -539,10 +588,10 @@ func buildGateways(cfg *config.Config, sc *SharedComponents, wsServer *ws.Server
 				addr = ":8081"
 			}
 			gws = append(gws, newStandaloneWSGateway(wsServer, addr, wsPath, sc.Logger))
-			sc.Logger.Debug("gateway enabled",
-				slog.String("type", "websocket"),
-				slog.String("addr", addr),
+			sc.Logger.Info("websocket agent endpoint starting (standalone)",
+				slog.String("listen_addr", addr),
 				slog.String("path", wsPath),
+				slog.String("agent_connect_url", fmt.Sprintf("ws://localhost%s%s", addr, wsPath)),
 			)
 		}
 	}

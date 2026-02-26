@@ -19,6 +19,7 @@ type AgentPollerConfig struct {
 	MaxConcurrentTasks int
 	TaskTimeout        time.Duration
 	HeartbeatInterval  time.Duration
+	EngineConfig       EngineConfig // Shared engine config (for recovery settings).
 }
 
 // AgentPoller polls the database for ready tasks and executes them.
@@ -191,6 +192,22 @@ func (p *AgentPoller) executeTask(ctx context.Context, task *Task) {
 		}
 	}
 
+	// Handle diagnostician output (recovery decision).
+	if task.AgentRole == RoleDiagnostician && output != nil {
+		sched := &scheduler{
+			store:   p.store,
+			logger:  p.logger,
+			metrics: p.metrics,
+			config:  p.config.EngineConfig,
+		}
+		if err := sched.handleDiagnosticianOutput(ctx, wf, task, output); err != nil {
+			p.logger.WarnContext(ctx, "handling diagnostician output",
+				slog.String("task_id", task.ID.String()),
+				slog.String("error", err.Error()),
+			)
+		}
+	}
+
 	// Accumulate cost on workflow.
 	if output != nil && output.CostUSD > 0 {
 		p.updateWorkflowCost(ctx, wf, output.CostUSD)
@@ -215,8 +232,9 @@ func (p *AgentPoller) maybeFinishWorkflow(ctx context.Context, wf *Workflow) {
 	running := countByStatus(allTasks, TaskRunning)
 	pending := countByStatus(allTasks, TaskPending)
 	blocked := countByStatus(allTasks, TaskBlocked)
+	recovering := countByStatus(allTasks, TaskRecovering)
 
-	if running > 0 || pending > 0 || blocked > 0 {
+	if running > 0 || pending > 0 || blocked > 0 || recovering > 0 {
 		return // Still in progress.
 	}
 

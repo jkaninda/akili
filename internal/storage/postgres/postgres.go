@@ -154,6 +154,7 @@ func autoMigrate(db *gorm.DB) error {
 		&AgentHeartbeatModel{},
 		&HeartbeatTaskModel{},
 		&HeartbeatTaskResultModel{},
+		&SoulEventModel{},
 	); err != nil {
 		return err
 	}

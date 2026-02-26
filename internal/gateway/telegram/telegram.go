@@ -281,7 +281,7 @@ func (g *Gateway) handleMessage(ctx context.Context, msg *Message) {
 	text := msg.Text
 	if strings.HasPrefix(text, "/start") {
 		g.sendHTML(ctx, chatID,
-			"\U0001F6E1 <b>Akili</b> — Security-First AI Agent\n\n"+
+			"\U0001F6E1 <b>Akili</b> — Autonomous AI Operator System\n\n"+
 				"Send a message to get started.\n"+
 				"All actions follow <b>default-deny</b> security and require explicit permission.")
 		return

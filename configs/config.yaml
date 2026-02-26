@@ -1,0 +1,402 @@
+# Akili Gateway Configuration (Full)
+#
+# This is the complete gateway configuration with all subsystems.
+# The gateway orchestrates agents, manages persistence, and exposes
+# multiple communication gateways (CLI, HTTP, WebSocket, Slack, Telegram, Signal).
+#
+# Usage:
+#   akili --config configs/config.yaml
+#   akili gateway --config configs/config.yaml
+
+# Workspace and data directories
+# Defaults: ~/.akili/workspace and ~/.akili/data
+# Override: AKILI_WORKSPACE and AKILI_DATA_DIR env vars
+workspace: ""
+data_dir: ""
+
+# When true, bypass human approval for high-risk tools.
+# RBAC, policies, budgets, and audit logging remain enforced.
+# Override: AKILI_AUTONOMOUS_MODE env var
+autonomous_mode: false
+
+# ---------------------------------------------------------------------------
+# Storage — persistence backend
+# ---------------------------------------------------------------------------
+# "sqlite" (default, zero-config) or "postgres" (production).
+# When nil/absent, defaults to SQLite with DB path derived from data_dir.
+storage:
+  driver: sqlite
+  # sqlite:
+  #   path: ""              # Custom path. Default: <data_dir>/akili.db
+  #   journal_mode: wal     # WAL mode for concurrent reads
+  # postgres:
+  #   dsn: "postgres://akili:akili@localhost:5432/akili?sslmode=disable"
+  #   max_open_conns: 25
+  #   max_idle_conns: 5
+  #   conn_max_lifetime_s: 1800
+  #   default_org_name: default
+
+# ---------------------------------------------------------------------------
+# Security — RBAC, permissions, and audit
+# ---------------------------------------------------------------------------
+security:
+  default_permissions:
+    - read_files
+    - web_search
+  require_approval:
+    - write_files
+    - shell_exec
+  default_role: operator
+  roles:
+    viewer:
+      permissions:
+        - read_files
+        - web_search
+        - database_read
+        - infra_lookup
+      max_risk_level: low
+      require_approval: []
+    operator:
+      permissions:
+        - read_files
+        - web_search
+        - shell_exec
+        - write_files
+        - git_read
+        - git_write
+        - database_read
+        - browser_navigate
+        - create_cronjob
+        - create_alert
+        - send_notification
+        - infra_lookup
+        - infra_exec
+      max_risk_level: high
+      require_approval:
+        - shell_exec
+        - git_write
+        - create_cronjob
+        - create_alert
+        - infra_exec
+    admin:
+      permissions:
+        - read_files
+        - web_search
+        - shell_exec
+        - write_files
+        - git_read
+        - git_write
+        - code_exec
+        - database_read
+        - browser_navigate
+        - create_cronjob
+        - create_alert
+        - send_notification
+        - infra_lookup
+        - infra_manage
+        - infra_exec
+      max_risk_level: critical
+      require_approval:
+        - code_exec
+        - create_alert
+        - infra_exec
+        - infra_manage
+  user_roles: {}
+
+# ---------------------------------------------------------------------------
+# Budget — per-user token spend limits
+# ---------------------------------------------------------------------------
+budget:
+  default_limit_usd: 10.0
+
+# ---------------------------------------------------------------------------
+# Sandbox — code execution isolation
+# ---------------------------------------------------------------------------
+sandbox:
+  type: process    # "process" or "docker"
+  max_cpu_cores: 1
+  max_memory_mb: 512
+  max_execution_seconds: 30
+  network_allowed: false
+  docker:
+    image: jkaninda/akili-runtime:latest
+    cpu_cores: 0.5
+    pids_limit: 64
+
+# ---------------------------------------------------------------------------
+# Tools — per-tool configuration and restrictions
+# ---------------------------------------------------------------------------
+tools:
+  file:
+    allowed_paths:
+      - /tmp/akili
+    max_file_size_bytes: 10485760   # 10 MB
+  web:
+    allowed_domains: []             # Empty = all domains allowed
+    max_response_bytes: 5242880     # 5 MB
+    timeout_seconds: 15
+  browser:
+    allowed_domains: []
+    max_response_bytes: 5242880
+    timeout_seconds: 15
+    max_navigations_per_call: 5
+  code:
+    allowed_languages:
+      - python3
+      - sh
+  git:
+    allowed_paths: []               # Empty = all repos allowed
+  # MCP (Model Context Protocol) external tool servers
+  # mcp:
+  #   - name: filesystem
+  #     transport: stdio
+  #     command: npx
+  #     args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+  #     permission: mcp_filesystem
+  #     risk_level: medium
+  #   - name: kubernetes-mcp-server
+  #     transport: stdio
+  #     command: npx
+  #     args: ["-y", "kubernetes-mcp-server@latest"]
+  #     permission: mcp__infra
+  #     risk_level: high
+
+# ---------------------------------------------------------------------------
+# Gateways — communication interfaces
+# ---------------------------------------------------------------------------
+gateways:
+  # Interactive CLI
+  cli:
+    enabled: true
+
+  # HTTP/REST API
+  http:
+    enabled: true
+    listen_addr: ":8080"
+    enable_docs: true
+    max_request_size_bytes: 1048576   # 1 MB
+    api_key_user_mapping: {}          # API key hash -> user ID
+    rate_limit:
+      requests_per_minute: 60
+      burst_size: 10
+
+  # WebSocket server for remote agent connections
+  websocket:
+    enabled: true
+    path: /ws/agents
+    agent_token: change-me            # Shared token for agent authentication
+    heartbeat_interval_seconds: 30
+    ack_timeout_seconds: 30           # Time to wait for task ACK before re-queuing
+    task_reassign_timeout_seconds: 120
+
+  # Slack gateway
+  slack:
+    enabled: false
+    signing_secret: ""                # Override: SLACK_SIGNING_SECRET env var
+    bot_token: ""                     # Override: SLACK_BOT_TOKEN env var
+    listen_addr: ":3000"
+    user_mapping: {}
+    default_user_role: ""
+    approval_channel: ""
+    rate_limit:
+      requests_per_minute: 30
+      burst_size: 5
+
+  # Telegram gateway
+  telegram:
+    enabled: false
+    bot_token: ""                     # Override: TELEGRAM_BOT_TOKEN env var
+    webhook_url: ""
+    listen_addr: ":3001"
+    allowed_users: []
+    user_mapping: {}
+    poll_timeout_seconds: 30
+    rate_limit:
+      requests_per_minute: 30
+      burst_size: 5
+
+  # Signal gateway (via signal-cli-rest-api)
+  signal:
+    enabled: false
+    api_url: "http://localhost:8080"   # Override: SIGNAL_GATEWAY_API_URL env var
+    sender_number: ""                  # Override: SIGNAL_GATEWAY_SENDER_NUMBER env var
+    allowed_users: []
+    user_mapping: {}
+    poll_interval_seconds: 2
+    rate_limit:
+      requests_per_minute: 30
+      burst_size: 5
+
+# ---------------------------------------------------------------------------
+# Approval — human-in-the-loop workflow
+# ---------------------------------------------------------------------------
+approval:
+  ttl_seconds: 300                    # Approval validity window (5 min)
+  auto_approval:
+    enabled: false
+    max_auto_approvals: 10            # Per user per hour
+    allowed_tools: []                 # Tools eligible for auto-approval
+    required_approvals: 3             # Manual approvals before auto kicks in
+    window_hours: 24                  # Lookback window
+
+# ---------------------------------------------------------------------------
+# LLM Providers
+# ---------------------------------------------------------------------------
+# API keys can be set here or via env vars:
+#   ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
+providers:
+  default: anthropic
+  fallback:
+    - openai
+    - gemini
+  anthropic:
+    model: claude-sonnet-4-5-20250929
+  openai:
+    model: gpt-4o
+  gemini:
+    model: gemini-2.0-flash
+  ollama:
+    model: qwen3:8b
+    base_url: http://localhost:11434
+
+# ---------------------------------------------------------------------------
+# Memory — persistent conversation history
+# ---------------------------------------------------------------------------
+memory:
+  enabled: true
+  max_history_messages: 100
+  max_message_bytes: 32768
+
+# ---------------------------------------------------------------------------
+# Notification — dispatch subsystem (email, WhatsApp, Signal)
+# ---------------------------------------------------------------------------
+notification:
+  enabled: false
+  email:
+    host: smtp.example.com
+    port: 587
+    username: ""
+    from: akili@example.com
+    tls: true
+  whatsapp:
+    access_token: ""                  # Override: WHATSAPP_ACCESS_TOKEN env var
+  signal:
+    api_url: "http://localhost:8080"  # Override: SIGNAL_API_URL env var
+    sender_number: ""                 # Override: SIGNAL_SENDER_NUMBER env var
+
+# ---------------------------------------------------------------------------
+# Alerting — rule-based alert checker
+# ---------------------------------------------------------------------------
+# Requires notification to be enabled.
+alerting:
+  enabled: false
+  poll_interval_seconds: 30
+  max_concurrent_checks: 10
+  default_cooldown_seconds: 300
+
+# ---------------------------------------------------------------------------
+# Heartbeat Tasks — periodic health-check tasks from Markdown files
+# ---------------------------------------------------------------------------
+heartbeat_tasks:
+  enabled: false
+  tasks_dirs:
+    - configs/heartbeat-tasks
+  poll_interval_seconds: 30
+  file_poll_interval_seconds: 60
+  max_concurrent_tasks: 3
+  quick_task_timeout_seconds: 60
+  long_task_timeout_seconds: 300
+  default_user_id: system
+
+# ---------------------------------------------------------------------------
+# Orchestrator — multi-agent workflow engine with skill/runbook matching
+# ---------------------------------------------------------------------------
+orchestrator:
+  enabled: true
+  skills_dir: runbooks/
+  max_depth: 5
+  max_tasks: 50
+  recovery:
+    enabled: true
+    max_retries: 2
+    max_recovery_depth: 1
+    recovery_budget_pct: 0.25
+    allowed_tools: []
+    allow_retry: true
+    escalate_on_failure: true
+
+# ---------------------------------------------------------------------------
+# Scheduler — cron job executor
+# ---------------------------------------------------------------------------
+# Requires orchestrator to be enabled.
+scheduler:
+  enabled: true
+  poll_interval_seconds: 30
+  max_concurrent_jobs: 5
+  missed_job_window_seconds: 3600     # 1 hour
+
+# ---------------------------------------------------------------------------
+# Observability — metrics, tracing, and anomaly detection
+# ---------------------------------------------------------------------------
+observability:
+  metrics:
+    enabled: true
+    path: /metrics
+  tracing:
+    enabled: false
+    endpoint: localhost:4317
+    protocol: grpc
+    service_name: akili
+    sample_rate: 1.0
+  anomaly:
+    enabled: true
+    error_rate_threshold: 0.5         # 50% error rate triggers anomaly
+    budget_spike_multiplier: 3.0      # 3x normal spend triggers anomaly
+    window_seconds: 300               # 5-minute sliding window
+
+# ---------------------------------------------------------------------------
+# Infrastructure — infra node memory (lookup, exec, manage tools)
+# ---------------------------------------------------------------------------
+infrastructure:
+  enabled: true
+
+# ---------------------------------------------------------------------------
+# Secrets — provider chain for sensitive values
+# ---------------------------------------------------------------------------
+secrets:
+  providers:
+    - type: env
+    # - type: vault
+    #   config:
+    #     address: "http://localhost:8200"
+    #     token_path: "/etc/vault/token"
+
+# ---------------------------------------------------------------------------
+# Policies — capability-based security policies for agents and roles
+# ---------------------------------------------------------------------------
+policies:
+  policies: []
+  bindings: {}
+
+# ---------------------------------------------------------------------------
+# Soul — self-learning and evolution subsystem
+# ---------------------------------------------------------------------------
+soul:
+  enabled: false
+  reflection_interval_mins: 60
+
+# ---------------------------------------------------------------------------
+# Optimization — token-reduction for LLM calls
+# ---------------------------------------------------------------------------
+optimization:
+  lazy_tool_loading: true
+  max_runbook_matches: 3
+  runbook_match_threshold: 0.15
+  skill_summary_mode: compact         # "full", "compact", or "none"
+
+# ---------------------------------------------------------------------------
+# Embedded Agent — fallback agent when no remote agents are connected
+# ---------------------------------------------------------------------------
+embedded_agent:
+  enabled: true
+  fallback: true

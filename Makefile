@@ -105,10 +105,10 @@ onboarding: build
 	./bin/$(APP_NAME) onboarding gateway
 
 run-gateway: build
-	./bin/$(APP_NAME) gateway --config ~/.akili/config.json
+	./bin/$(APP_NAME) gateway --config configs/akili.json
 
 run-agent: build
-	./bin/$(APP_NAME) agent --config configs/akili.json
+	./bin/$(APP_NAME) agent --config configs/agent.json
 
 # ── Help ─────────────────────────────────────────────────────────────
 .PHONY: help

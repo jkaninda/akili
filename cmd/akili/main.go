@@ -1,4 +1,4 @@
-// Akili — Security-First AI Agent for DevOps & SRE.
+// Akili — Autonomous AI Operator System for DevOps & SRE.
 package main
 
 import (
@@ -12,17 +12,17 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "akili",
-	Short: "Akili — Security-first AI Agent designed for SRE, DevOps, and Platform teams.",
-	Long: `Akili is a security-first AI agent for DevOps and SRE teams.
-It coordinates multiple agent roles through a DAG-based task scheduler
-to decompose and execute complex operational goals.`,
+	Short: "Akili — Autonomous AI Operator System for SRE, DevOps, and Platform teams.",
+	Long: `Akili is a security-first autonomous AI operator system for DevOps and SRE teams.
+It coordinates multiple specialized roles through a DAG-based task scheduler
+to decompose and execute complex operational goals autonomously within policy boundaries.`,
 	RunE:          runGateway, // Default to gateway mode.
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
 
 func init() {
-	rootCmd.AddCommand(gatewayCmd, agentCmd, onboardingCmd, versionCmd)
+	rootCmd.AddCommand(gatewayCmd, agentCmd, queryCmd, onboardingCmd, versionCmd)
 	_ = godotenv.Load()
 
 }

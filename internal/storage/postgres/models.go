@@ -178,13 +178,16 @@ type TaskModel struct {
 	Error        string     `gorm:"type:text"`
 	CostUSD      float64    `gorm:"type:numeric(14,6);not null;default:0"`
 	TokensUsed   int        `gorm:"not null;default:0"`
-	ClaimedBy    string     `gorm:"index"`
-	ClaimedAt    *time.Time `gorm:"index"`
-	Metadata     JSONB      `gorm:"type:jsonb;not null;default:'{}'"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	StartedAt    *time.Time
-	CompletedAt  *time.Time
+	ClaimedBy      string     `gorm:"index"`
+	ClaimedAt      *time.Time `gorm:"index"`
+	RetryCount     int        `gorm:"not null;default:0"`
+	MaxRetries     int        `gorm:"not null;default:0"`
+	OriginalTaskID *uuid.UUID `gorm:"type:uuid;index"`
+	Metadata       JSONB      `gorm:"type:jsonb;not null;default:'{}'"`
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	StartedAt      *time.Time
+	CompletedAt    *time.Time
 }
 
 func (TaskModel) TableName() string { return "tasks" }
@@ -444,3 +447,21 @@ type HeartbeatTaskResultModel struct {
 }
 
 func (HeartbeatTaskResultModel) TableName() string { return "heartbeat_task_results" }
+
+// SoulEventModel maps to the "soul_events" table.
+// Append-only. No UpdatedAt or DeletedAt — the soul event log is immutable.
+type SoulEventModel struct {
+	ID          uuid.UUID `gorm:"type:uuid;primaryKey"`
+	OrgID       uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_soul_events_org_version"`
+	Version     int       `gorm:"not null;uniqueIndex:idx_soul_events_org_version"`
+	EventType   string    `gorm:"not null"`
+	Severity    string    `gorm:"not null;default:'normal'"`
+	Category    string    `gorm:"not null;default:''"`
+	Title       string    `gorm:"not null"`
+	Description string    `gorm:"type:text;not null"`
+	Evidence    string    `gorm:"type:text;not null;default:'{}'"`
+	PriorState  string    `gorm:"type:text;not null;default:''"`
+	CreatedAt   time.Time `gorm:"index"`
+}
+
+func (SoulEventModel) TableName() string { return "soul_events" }

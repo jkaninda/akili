@@ -58,6 +58,19 @@ type Orchestrator struct {
 	// ReAct planning.
 	planningEnabled bool
 
+	// Autonomous mode: bypass approval checks while keeping RBAC, policies, budgets, and audit.
+	autonomousMode bool
+
+	// Soul context: pre-rendered soul state for system prompt injection.
+	soulContext string
+
+	// Token optimization.
+	lazyToolLoading     bool    // Send only intent-relevant tools per call.
+	runbookMaxN         int     // Max runbook injections per call. 0 = default (2).
+	runbookThreshold    float64 // Min score for runbook injection. 0 = default (0.05).
+	skillSummaryMode    string  // "full", "compact", or "none". "" = "full".
+	skillSummaryCompact string  // Pre-rendered compact (names-only) skill list.
+
 	// Conversation memory (nil = ephemeral, no persistence).
 	convStore          ConversationStore
 	convOrgID          uuid.UUID
@@ -131,6 +144,12 @@ func (o *Orchestrator) WithAutoApprover(aa *approval.AutoApprover) *Orchestrator
 	return o
 }
 
+// WithSoulContext injects the soul's learned patterns, strategies, and guardrails into the system prompt.
+func (o *Orchestrator) WithSoulContext(ctx string) *Orchestrator {
+	o.soulContext = ctx
+	return o
+}
+
 // WithRunbooks sets the available runbooks for dynamic context injection.
 func (o *Orchestrator) WithRunbooks(runbooks []Runbook) *Orchestrator {
 	o.runbooks = runbooks
@@ -160,16 +179,76 @@ func (o *Orchestrator) WithPlanning(enabled bool) *Orchestrator {
 	return o
 }
 
+// WithAutonomousMode enables autonomous operation: high-risk tools execute
+// without human approval. RBAC permissions, policy enforcement, budget limits,
+// and audit logging remain fully enforced.
+func (o *Orchestrator) WithAutonomousMode(enabled bool) *Orchestrator {
+	o.autonomousMode = enabled
+	return o
+}
+
+// WithOptimization configures token-reduction behavior.
+func (o *Orchestrator) WithOptimization(lazyTools bool, maxRunbooks int, runbookThreshold float64, skillMode string) *Orchestrator {
+	o.lazyToolLoading = lazyTools
+	o.runbookMaxN = maxRunbooks
+	if o.runbookMaxN <= 0 {
+		o.runbookMaxN = 2
+	}
+	o.runbookThreshold = runbookThreshold
+	if o.runbookThreshold <= 0 {
+		o.runbookThreshold = 0.05
+	}
+	o.skillSummaryMode = skillMode
+	if o.skillSummaryMode == "" {
+		o.skillSummaryMode = "full"
+	}
+	return o
+}
+
+// WithSkillSummaryCompact injects the compact (names-only) skill list.
+func (o *Orchestrator) WithSkillSummaryCompact(compact string) *Orchestrator {
+	o.skillSummaryCompact = compact
+	return o
+}
+
 // buildSystemPrompt returns the system prompt enriched with skill information,
 func (o *Orchestrator) buildSystemPrompt(userMessage string) string {
 	prompt := o.systemPrompt
-	if o.skillSummary != "" {
-		prompt += "\n\n## Available Skills\n" + o.skillSummary
+
+	// Skill summary injection (respects optimization mode).
+	mode := o.skillSummaryMode
+	if mode == "" {
+		mode = "full"
+	}
+	switch mode {
+	case "none":
+		// No skill summary injected.
+	case "compact":
+		if o.skillSummaryCompact != "" {
+			prompt += "\n\n## Available Skills\n" + o.skillSummaryCompact
+		}
+	default: // "full"
+		if o.skillSummary != "" {
+			prompt += "\n\n## Available Skills\n" + o.skillSummary
+		}
+	}
+
+	// Soul context injection: learned patterns, strategies, guardrails.
+	if o.soulContext != "" {
+		prompt += o.soulContext
 	}
 
 	// Dynamic runbook injection: match user message against runbooks.
 	if len(o.runbooks) > 0 && userMessage != "" {
-		matched := matchRunbooks(userMessage, o.runbooks, 2)
+		maxN := o.runbookMaxN
+		if maxN <= 0 {
+			maxN = 2
+		}
+		threshold := o.runbookThreshold
+		if threshold <= 0 {
+			threshold = 0.05
+		}
+		matched := matchRunbooksWithThreshold(userMessage, o.runbooks, maxN, threshold)
 		for _, rb := range matched {
 			prompt += fmt.Sprintf("\n\n## Active Runbook: %s\n%s", rb.Name, rb.Description)
 		}
@@ -217,6 +296,59 @@ func detectIncidentContext(message string) bool {
 		}
 	}
 	return false
+}
+
+// detectToolIntent analyzes the user message and returns the set of tool
+// categories that should be included beyond the "core" set.
+func detectToolIntent(message string) map[string]bool {
+	if message == "" {
+		return nil
+	}
+	lower := strings.ToLower(message)
+	active := make(map[string]bool)
+
+	// Investigation: reading, querying, analyzing.
+	for _, kw := range []string{
+		"log", "logs", "check", "review", "show", "list", "query",
+		"search", "fetch", "read", "look", "browse", "database", "sql",
+		"status", "history", "diff", "branch", "commit", "code", "analyze",
+	} {
+		if strings.Contains(lower, kw) {
+			active["investigation"] = true
+			break
+		}
+	}
+
+	// Infrastructure: references to infra concepts.
+	for _, kw := range []string{
+		"server", "vm", "node", "host", "kubernetes", "k8s", "docker",
+		"cluster", "pod", "deployment", "infra", "infrastructure",
+		"instance", "machine", "bare metal", "ssh",
+	} {
+		if strings.Contains(lower, kw) {
+			active["infra"] = true
+			break
+		}
+	}
+
+	// Git mutation: write operations.
+	for _, kw := range []string{
+		"push", "commit", "merge", "rebase", "tag", "cherry-pick",
+		"git write", "git push", "git add",
+	} {
+		if strings.Contains(lower, kw) {
+			active["git_write"] = true
+			break
+		}
+	}
+
+	// Incident context implies infra + investigation.
+	if detectIncidentContext(message) {
+		active["infra"] = true
+		active["investigation"] = true
+	}
+
+	return active
 }
 
 // Process sends the user's message to the LLM and runs an agentic loop:
@@ -283,6 +415,9 @@ func (o *Orchestrator) Process(ctx context.Context, input *Input) (*Response, er
 	history = append(history, userMsg)
 
 	// Context window management: summarize then truncate from oldest if over limit.
+	// Both operations remove messages from the front, so historyStart must be adjusted
+	// to prevent slice-bounds panics when persisting new messages later.
+	preTruncLen := len(history)
 	if o.summarizeOnTruncate {
 		maxHist := o.maxHistoryMessages
 		if maxHist <= 0 {
@@ -291,11 +426,24 @@ func (o *Orchestrator) Process(ctx context.Context, input *Input) (*Response, er
 		history = summarizeHistory(ctx, o.provider, history, maxHist, o.logger)
 	}
 	history = o.truncateHistory(history)
+	if dropped := preTruncLen - len(history); dropped > 0 {
+		historyStart -= dropped
+		if historyStart < 0 {
+			historyStart = 0
+		}
+	}
 
-	// Build tool definitions from registry
+	// Build tool definitions from registry (intent-filtered when lazy loading enabled).
 	var toolDefs []llm.ToolDefinition
+	var lazyToolsActive bool
 	if o.toolRegistry != nil {
-		toolDefs = tools.ToLLMDefinitions(o.toolRegistry)
+		if o.lazyToolLoading {
+			activeCategories := detectToolIntent(input.Message)
+			toolDefs = tools.ToLLMDefinitionsForIntent(o.toolRegistry, activeCategories)
+			lazyToolsActive = true
+		} else {
+			toolDefs = tools.ToLLMDefinitions(o.toolRegistry)
+		}
 	}
 
 	systemPrompt := o.buildSystemPrompt(input.Message)
@@ -349,6 +497,30 @@ func (o *Orchestrator) Process(ctx context.Context, input *Input) (*Response, er
 			slog.Int("tool_calls", len(llmResp.ToolUseBlocks())),
 			slog.String("correlation_id", input.CorrelationID),
 		)
+
+		// Safety net: if lazy tool loading is active and the LLM tried to use
+		// a tool we have but didn't send, expand to the full set for next iteration.
+		if lazyToolsActive {
+			for _, block := range llmResp.ToolUseBlocks() {
+				if o.toolRegistry.Get(block.Name) != nil {
+					found := false
+					for _, td := range toolDefs {
+						if td.Name == block.Name {
+							found = true
+							break
+						}
+					}
+					if !found {
+						toolDefs = tools.ToLLMDefinitions(o.toolRegistry)
+						lazyToolsActive = false
+						o.logger.DebugContext(ctx, "lazy tool loading expanded to full set",
+							slog.String("trigger_tool", block.Name),
+						)
+						break
+					}
+				}
+			}
+		}
 
 		resultBlocks, results, approvals := o.executeToolCalls(ctx, input, llmResp.ToolUseBlocks())
 		allToolResults = append(allToolResults, results...)
@@ -688,6 +860,18 @@ func (o *Orchestrator) runSecurityChecks(ctx context.Context, req *ToolRequest, 
 	// Approval check.
 	if err := o.security.RequireApproval(ctx, req.UserID, action); err != nil {
 		if errors.Is(err, security.ErrApprovalRequired) {
+			// Autonomous mode: bypass approval, log for auditability.
+			if o.autonomousMode {
+				_ = o.logAuditEvent(ctx, req, action.Name, "autonomous_approved", estimatedCost, "", nil)
+				o.logger.InfoContext(ctx, "tool autonomous-approved (autonomous_mode enabled)",
+					slog.String("tool", req.ToolName),
+					slog.String("user_id", req.UserID),
+					slog.String("action", action.Name),
+					slog.String("risk", action.RiskLevel.String()),
+				)
+				return nil
+			}
+
 			// Check auto-approval before creating a pending approval.
 			if o.autoApprover != nil {
 				if ok, reason := o.autoApprover.ShouldAutoApprove(req.UserID, req.ToolName, req.Parameters); ok {

@@ -12,6 +12,7 @@ type WorkflowMetrics struct {
 	AgentInvocationsTotal *prometheus.CounterVec
 	ActiveWorkflows       prometheus.Gauge
 	ActiveTasks           prometheus.Gauge
+	RecoveryAttemptsTotal *prometheus.CounterVec
 }
 
 // NewWorkflowMetrics creates and registers workflow metrics on the given registry.
@@ -72,6 +73,13 @@ func NewWorkflowMetrics(reg *prometheus.Registry) *WorkflowMetrics {
 			Name:      "active_tasks",
 			Help:      "Number of currently running tasks.",
 		}),
+
+		RecoveryAttemptsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "akili",
+			Subsystem: "workflow",
+			Name:      "recovery_attempts_total",
+			Help:      "Total recovery attempts by action (initiated, retry, escalate, skip).",
+		}, []string{"action"}),
 	}
 
 	reg.MustRegister(
@@ -82,6 +90,7 @@ func NewWorkflowMetrics(reg *prometheus.Registry) *WorkflowMetrics {
 		m.AgentInvocationsTotal,
 		m.ActiveWorkflows,
 		m.ActiveTasks,
+		m.RecoveryAttemptsTotal,
 	)
 
 	return m

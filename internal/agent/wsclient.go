@@ -14,6 +14,16 @@ import (
 	"github.com/jkaninda/akili/internal/protocol"
 )
 
+// ConnectionState represents the current state of the WebSocket client.
+type ConnectionState int
+
+const (
+	StateDisconnected ConnectionState = iota
+	StateConnecting
+	StateConnected
+	StateReconnecting
+)
+
 // WSClientConfig configures the agent-side WebSocket client.
 type WSClientConfig struct {
 	GatewayURL        string
@@ -44,8 +54,13 @@ type WSClient struct {
 	connMu sync.Mutex
 
 	// Active tasks tracking.
-	activeMu    sync.Mutex
-	activeTasks int
+	activeMu      sync.Mutex
+	activeTasks   int
+	activeTaskIDs map[string]time.Time // taskID -> start time
+
+	// Connection state tracking.
+	state   ConnectionState
+	stateMu sync.RWMutex
 }
 
 // NewWSClient creates a new WebSocket client for agent mode.
@@ -60,8 +75,9 @@ func NewWSClient(cfg WSClientConfig, logger *slog.Logger) *WSClient {
 		cfg.MaxParallel = 5
 	}
 	return &WSClient{
-		cfg:    cfg,
-		logger: logger,
+		cfg:           cfg,
+		logger:        logger,
+		activeTaskIDs: make(map[string]time.Time),
 	}
 }
 
@@ -75,34 +91,84 @@ func (c *WSClient) OnApproval(handler ApprovalHandler) {
 	c.approvalHandler = handler
 }
 
+// State returns the current connection state.
+func (c *WSClient) State() ConnectionState {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return c.state
+}
+
+func (c *WSClient) setState(s ConnectionState) {
+	c.stateMu.Lock()
+	c.state = s
+	c.stateMu.Unlock()
+}
+
 // Run connects to the gateway and enters the main message loop.
-// Reconnects automatically on disconnect with exponential backoff.
+// The initial connection must succeed — if the gateway is unreachable at startup,
+// Run returns an error immediately (fail-fast). After a successful connection,
+// subsequent disconnects trigger automatic reconnection with exponential backoff.
 // Blocks until the context is cancelled.
 func (c *WSClient) Run(ctx context.Context) error {
+	// First connection attempt: fail fast if the gateway is unreachable.
+	c.setState(StateConnecting)
+	connected, err := c.connectAndServe(ctx)
+	if ctx.Err() != nil {
+		c.setState(StateDisconnected)
+		return ctx.Err()
+	}
+	if !connected {
+		c.setState(StateDisconnected)
+		return fmt.Errorf("unable to connect to gateway at %s: %w", c.cfg.GatewayURL, err)
+	}
+
+	// After the first successful connection, reconnect on subsequent failures.
 	attempt := 0
 	for {
-		err := c.connectAndServe(ctx)
+		if err != nil {
+			c.setState(StateReconnecting)
+			attempt++
+			backoff := c.backoff(attempt)
+			c.logger.Warn("reconnecting to gateway",
+				slog.String("agent_id", c.cfg.AgentID),
+				slog.String("gateway_url", c.cfg.GatewayURL),
+				slog.String("backoff", backoff.String()),
+				slog.Int("attempt", attempt),
+				slog.String("reason", err.Error()),
+			)
+
+			select {
+			case <-ctx.Done():
+				c.setState(StateDisconnected)
+				c.logger.Info("agent shutting down gracefully",
+					slog.String("agent_id", c.cfg.AgentID),
+				)
+				return ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
+
+		c.setState(StateConnecting)
+		connected, err = c.connectAndServe(ctx)
 		if ctx.Err() != nil {
+			c.setState(StateDisconnected)
+			c.logger.Info("agent shutting down gracefully",
+				slog.String("agent_id", c.cfg.AgentID),
+			)
 			return ctx.Err()
 		}
 
-		attempt++
-		backoff := c.backoff(attempt)
-		c.logger.Warn("disconnected from gateway, reconnecting",
-			slog.String("error", err.Error()),
-			slog.String("backoff", backoff.String()),
-			slog.Int("attempt", attempt),
-		)
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(backoff):
+		// Reset backoff after a successful connection that later dropped.
+		if connected {
+			attempt = 0
 		}
 	}
 }
 
-func (c *WSClient) connectAndServe(ctx context.Context) error {
+// connectAndServe establishes the WebSocket connection, registers, and runs the
+// message loop. Returns (true, err) if the connection was established before
+// failing, or (false, err) if it failed during connection setup.
+func (c *WSClient) connectAndServe(ctx context.Context) (bool, error) {
 	// Build dial URL with token.
 	dialURL := c.cfg.GatewayURL
 	if c.cfg.Token != "" {
@@ -122,7 +188,11 @@ func (c *WSClient) connectAndServe(ctx context.Context) error {
 		Subprotocols: []string{"akili-agent-v1"},
 	})
 	if err != nil {
-		return fmt.Errorf("dialing gateway: %w", err)
+		c.logger.Warn("failed to connect to gateway",
+			slog.String("gateway_url", c.cfg.GatewayURL),
+			slog.String("error", err.Error()),
+		)
+		return false, fmt.Errorf("dialing gateway: %w", err)
 	}
 
 	c.connMu.Lock()
@@ -138,17 +208,21 @@ func (c *WSClient) connectAndServe(ctx context.Context) error {
 
 	// Send registration.
 	if err := c.sendRegistration(ctx, conn); err != nil {
-		return fmt.Errorf("registration: %w", err)
+		return false, fmt.Errorf("registration: %w", err)
 	}
 
 	// Wait for confirmation.
 	if err := c.waitForRegistered(ctx, conn); err != nil {
-		return fmt.Errorf("registration confirmation: %w", err)
+		return false, fmt.Errorf("registration confirmation: %w", err)
 	}
 
+	connectedAt := time.Now()
+	c.setState(StateConnected)
+
 	c.logger.Info("connected to gateway",
-		slog.String("url", c.cfg.GatewayURL),
+		slog.String("gateway_url", c.cfg.GatewayURL),
 		slog.String("agent_id", c.cfg.AgentID),
+		slog.Time("connected_at", connectedAt),
 	)
 
 	// Start heartbeat.
@@ -156,11 +230,22 @@ func (c *WSClient) connectAndServe(ctx context.Context) error {
 	defer hbCancel()
 	go c.heartbeatLoop(hbCtx, conn)
 
-	// Main message loop.
+	// Main message loop with read deadline.
+	readTimeout := 3 * c.cfg.HeartbeatInterval
+
 	for {
-		_, data, err := conn.Read(ctx)
+		readCtx, readCancel := context.WithTimeout(ctx, readTimeout)
+		_, data, err := conn.Read(readCtx)
+		readCancel()
+
 		if err != nil {
-			return fmt.Errorf("read: %w", err)
+			sessionDuration := time.Since(connectedAt)
+			c.logger.Info("disconnected from gateway",
+				slog.String("agent_id", c.cfg.AgentID),
+				slog.String("session_duration", sessionDuration.String()),
+				slog.String("error", err.Error()),
+			)
+			return true, fmt.Errorf("read: %w", err)
 		}
 
 		var env protocol.Envelope
@@ -221,6 +306,7 @@ func (c *WSClient) handleMessage(ctx context.Context, conn *websocket.Conn, env 
 		// Accept the task.
 		c.activeMu.Lock()
 		c.activeTasks++
+		c.activeTaskIDs[assignment.TaskID] = time.Now()
 		c.activeMu.Unlock()
 
 		accepted, _ := protocol.NewEnvelope(protocol.MsgTaskAccepted, protocol.TaskAcceptedPayload{
@@ -267,6 +353,7 @@ func (c *WSClient) executeTask(ctx context.Context, conn *websocket.Conn, assign
 	defer func() {
 		c.activeMu.Lock()
 		c.activeTasks--
+		delete(c.activeTaskIDs, assignment.TaskID)
 		c.activeMu.Unlock()
 	}()
 
@@ -346,10 +433,22 @@ func (c *WSClient) heartbeatLoop(ctx context.Context, conn *websocket.Conn) {
 		case <-ticker.C:
 			c.activeMu.Lock()
 			active := c.activeTasks
+			taskIDs := make([]string, 0, len(c.activeTaskIDs))
+			taskStates := make([]protocol.TaskStateInfo, 0, len(c.activeTaskIDs))
+			for id, startedAt := range c.activeTaskIDs {
+				taskIDs = append(taskIDs, id)
+				taskStates = append(taskStates, protocol.TaskStateInfo{
+					TaskID:  id,
+					State:   "running",
+					Elapsed: time.Since(startedAt).Truncate(time.Second).String(),
+				})
+			}
 			c.activeMu.Unlock()
 
 			env, _ := protocol.NewEnvelope(protocol.MsgAgentHeartbeat, protocol.HeartbeatPayload{
 				ActiveTasks: active,
+				TaskIDs:     taskIDs,
+				TaskStates:  taskStates,
 			})
 			env.AgentID = c.cfg.AgentID
 			if err := c.writeEnvelope(ctx, conn, env); err != nil {

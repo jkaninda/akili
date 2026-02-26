@@ -10,30 +10,37 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/jkaninda/akili/internal/agent"
 	"github.com/jkaninda/akili/internal/approval"
+	"github.com/jkaninda/akili/internal/security"
 )
-
-const cliUserID = "cli-user"
 
 // Gateway is the interactive command-line interface.
 type Gateway struct {
 	agent          agent.Agent
 	approvalMgr    approval.ApprovalManager
+	security       security.SecurityManager
 	logger         *slog.Logger
+	userID         string
 	done           chan struct{} // closed by Stop to signal shutdown
 	conversationID string        // persistent for the entire CLI session
 }
 
 // NewGateway creates a CLI gateway backed by the given agent.
-func NewGateway(a agent.Agent, am approval.ApprovalManager, logger *slog.Logger) *Gateway {
+func NewGateway(a agent.Agent, am approval.ApprovalManager, sec security.SecurityManager, userID string, logger *slog.Logger) *Gateway {
+	if userID == "" {
+		userID = "cli-user"
+	}
 	return &Gateway{
 		agent:          a,
 		approvalMgr:    am,
+		security:       sec,
 		logger:         logger,
+		userID:         userID,
 		done:           make(chan struct{}),
 		conversationID: uuid.New().String(),
 	}
@@ -44,7 +51,16 @@ func NewGateway(a agent.Agent, am approval.ApprovalManager, logger *slog.Logger)
 func (g *Gateway) Start(ctx context.Context) error {
 	scanner := bufio.NewScanner(os.Stdin)
 
-	fmt.Println("Akili — Security-First AI Agent Built for DevOps, SRE, and Platform Teams")
+	g.logger.InfoContext(ctx, "cli session started",
+		slog.String("user_id", g.userID),
+		slog.String("conversation_id", g.conversationID),
+	)
+	defer g.logger.InfoContext(ctx, "cli session ended",
+		slog.String("user_id", g.userID),
+		slog.String("conversation_id", g.conversationID),
+	)
+
+	fmt.Println("Akili — Autonomous AI Operator System for DevOps, SRE, and Platform Teams")
 	fmt.Println("Type your message (or \"exit\" to quit).")
 	fmt.Println()
 
@@ -78,18 +94,31 @@ func (g *Gateway) Start(ctx context.Context) error {
 		correlationID := newCorrelationID()
 
 		input := &agent.Input{
-			UserID:         cliUserID,
+			UserID:         g.userID,
 			Message:        line,
 			CorrelationID:  correlationID,
 			ConversationID: g.conversationID,
 		}
 
-		g.logger.DebugContext(ctx, "cli request",
-			slog.String("user_id", cliUserID),
+		start := time.Now()
+
+		g.logger.InfoContext(ctx, "cli request",
+			slog.String("user_id", g.userID),
 			slog.String("correlation_id", correlationID),
 		)
 
+		g.logAudit(ctx, security.AuditEvent{
+			Timestamp:     start,
+			CorrelationID: correlationID,
+			UserID:        g.userID,
+			Action:        "cli.request",
+			Result:        "intent",
+			Parameters:    map[string]any{"message_length": len(line)},
+		})
+
 		resp, err := g.agent.Process(ctx, input)
+		duration := time.Since(start)
+
 		if err != nil {
 			// Check if approval is needed.
 			var approvalErr *agent.ErrApprovalPending
@@ -99,12 +128,40 @@ func (g *Gateway) Start(ctx context.Context) error {
 			}
 
 			g.logger.ErrorContext(ctx, "agent processing failed",
+				slog.String("user_id", g.userID),
 				slog.String("correlation_id", correlationID),
+				slog.String("duration", duration.String()),
 				slog.String("error", err.Error()),
 			)
+
+			g.logAudit(ctx, security.AuditEvent{
+				Timestamp:     time.Now(),
+				CorrelationID: correlationID,
+				UserID:        g.userID,
+				Action:        "cli.request",
+				Result:        "failure",
+				Error:         err.Error(),
+			})
+
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			continue
 		}
+
+		g.logger.InfoContext(ctx, "cli response",
+			slog.String("user_id", g.userID),
+			slog.String("correlation_id", correlationID),
+			slog.Int("tokens_used", resp.TokensUsed),
+			slog.String("duration", duration.String()),
+		)
+
+		g.logAudit(ctx, security.AuditEvent{
+			Timestamp:     time.Now(),
+			CorrelationID: correlationID,
+			UserID:        g.userID,
+			Action:        "cli.request",
+			Result:        "success",
+			TokensUsed:    resp.TokensUsed,
+		})
 
 		fmt.Println()
 		fmt.Println(resp.Message)
@@ -149,10 +206,27 @@ func (g *Gateway) handleApproval(ctx context.Context, scanner *bufio.Scanner, er
 
 	answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
 	if answer == "y" || answer == "yes" {
+		g.logAudit(ctx, security.AuditEvent{
+			Timestamp:  time.Now(),
+			UserID:     g.userID,
+			Action:     "cli.approval",
+			Tool:       err.ToolName,
+			Result:     "approved",
+			ApprovedBy: g.userID,
+			Parameters: map[string]any{"approval_id": err.ApprovalID},
+		})
 		g.approveAndResume(ctx, err.ApprovalID)
 	} else {
+		g.logAudit(ctx, security.AuditEvent{
+			Timestamp:  time.Now(),
+			UserID:     g.userID,
+			Action:     "cli.approval",
+			Tool:       err.ToolName,
+			Result:     "denied",
+			Parameters: map[string]any{"approval_id": err.ApprovalID},
+		})
 		if g.approvalMgr != nil {
-			_ = g.approvalMgr.Deny(ctx, err.ApprovalID, cliUserID)
+			_ = g.approvalMgr.Deny(ctx, err.ApprovalID, g.userID)
 		}
 		fmt.Println("Denied.")
 	}
@@ -172,10 +246,27 @@ func (g *Gateway) handleApprovalRequest(ctx context.Context, scanner *bufio.Scan
 
 	answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
 	if answer == "y" || answer == "yes" {
+		g.logAudit(ctx, security.AuditEvent{
+			Timestamp:  time.Now(),
+			UserID:     g.userID,
+			Action:     "cli.approval",
+			Tool:       ar.ToolName,
+			Result:     "approved",
+			ApprovedBy: g.userID,
+			Parameters: map[string]any{"approval_id": ar.ApprovalID},
+		})
 		g.approveAndResume(ctx, ar.ApprovalID)
 	} else {
+		g.logAudit(ctx, security.AuditEvent{
+			Timestamp:  time.Now(),
+			UserID:     g.userID,
+			Action:     "cli.approval",
+			Tool:       ar.ToolName,
+			Result:     "denied",
+			Parameters: map[string]any{"approval_id": ar.ApprovalID},
+		})
 		if g.approvalMgr != nil {
-			_ = g.approvalMgr.Deny(ctx, ar.ApprovalID, cliUserID)
+			_ = g.approvalMgr.Deny(ctx, ar.ApprovalID, g.userID)
 		}
 		fmt.Println("Denied.")
 	}
@@ -188,7 +279,7 @@ func (g *Gateway) approveAndResume(ctx context.Context, approvalID string) {
 		return
 	}
 
-	if err := g.approvalMgr.Approve(ctx, approvalID, cliUserID); err != nil {
+	if err := g.approvalMgr.Approve(ctx, approvalID, g.userID); err != nil {
 		fmt.Fprintf(os.Stderr, "Approval failed: %v\n", err)
 		return
 	}
@@ -200,6 +291,14 @@ func (g *Gateway) approveAndResume(ctx context.Context, approvalID string) {
 	}
 
 	fmt.Printf("\nApproved. Result:\n%s\n", result.Output)
+}
+
+// logAudit writes an audit event via the security manager if available.
+func (g *Gateway) logAudit(ctx context.Context, event security.AuditEvent) {
+	if g.security == nil {
+		return
+	}
+	_ = g.security.LogAction(ctx, event)
 }
 
 // newCorrelationID generates a short random hex ID for request tracing.
