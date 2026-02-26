@@ -61,6 +61,10 @@ AI should not just be powerful, it should be controlled, auditable, and producti
 - **Zero-Config Storage** — SQLite by default with automatic workspace directory setup (`~/.akili/`). No external database required for single-node deployments. PostgreSQL available for production multi-tenant setups.
 - **Dual Runtime Mode** — Run as a gateway (HTTP/CLI/Slack/Telegram/Signal) or as a remote agent. Agents connect via WebSocket (recommended) for real-time task dispatch, or poll the database (legacy) for pending tasks.
 - **WebSocket Agent Protocol** — Gateway ↔ Agent communication via WebSocket with JSON envelope messaging, heartbeats, progress updates, and automatic reconnection. Agents register skills, receive task assignments, and report results in real-time.
+- **Capability-Based Policies** — Fine-grained access control beyond RBAC. Define allowlists/denylists for tools, filesystem paths, network domains, shell commands, and skills. Policies are bound to specific agents or roles.
+- **Soul Evolution** — Optional event-sourced self-improvement layer. The agent learns operational patterns, refines reasoning strategies, and conducts periodic reflections — all constrained by immutable security principles.
+- **Token Optimization** — Lazy tool loading, runbook match scoring, and configurable skill summary modes reduce token usage per LLM call without sacrificing capability.
+- **Query Command** — One-shot CLI for sending messages to the gateway with SSE streaming, autonomous mode, multi-turn conversation support, and structured exit codes.
 
 ## Tool Execution Flow
 
@@ -131,12 +135,13 @@ Every tool declares its required security action and risk level. The orchestrato
 - **Source Code**: [akili](https://github.com/jkaninda/akili)
 - **Docker Image**: [jkaninda/akili](https://hub.docker.com/r/jkaninda/akili)
 - **Akili Runtime**: [jkaninda/akili-runtime](https://hub.docker.com/r/jkaninda/akili-runtime)
+- **Examples**: [examples/](examples/) — Docker Compose deployment examples (Ollama, monitoring, etc.)
 
 ## Quick Start
 
 ### Prerequisites
 
-- Go 1.22+ (for building from source)
+- Go 1.26+ (for building from source)
 - Docker and Docker Compose (for containerized deployment)
 - An LLM API key (Anthropic, OpenAI, or Google Gemini — or a local Ollama instance)
 
@@ -278,6 +283,39 @@ export GEMINI_API_KEY=...
 # Agent mode (legacy DB polling, requires PostgreSQL):
 ./akili agent --config configs/akili.json --agent-id worker-1 --concurrency 5 --poll-interval 3
 ```
+
+### Query Command
+
+Send one-shot messages to the Akili gateway from the command line:
+
+```bash
+# Basic query
+./akili query -m "check if nginx is running" --api-key my-key
+
+# Stream response in real-time (SSE)
+./akili query -m "analyze the latest logs" --stream
+
+# Autonomous mode (bypass approval workflows; RBAC, budget, and audit still enforced)
+./akili query -m "restart the failing pods" --autonomous
+
+# Multi-turn conversation
+./akili query -m "what happened yesterday?" --conversation-id <uuid-from-previous-response>
+
+# Custom timeout
+./akili query -m "run a full cost audit" --timeout 600
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-m` / `--message` | — | Message to send (required) |
+| `--api-key` | `AKILI_API_KEY` env | API key for authentication |
+| `--gateway-url` | `AKILI_GATEWAY_URL` env | Gateway HTTP URL (default `http://localhost:8080`) |
+| `--stream` | `false` | Enable SSE streaming response |
+| `--autonomous` | `false` | Bypass approval workflows |
+| `--conversation-id` | — | Resume a previous conversation |
+| `--timeout` | `300` | Request timeout in seconds |
+
+**Exit codes:** `0` success, `1` execution failure, `2` policy denied / approval required, `3` gateway unavailable.
 
 ## Persistent Conversation Memory
 
@@ -1168,6 +1206,47 @@ Every action produces an immutable audit record:
 }
 ```
 
+## Capability-Based Policies
+
+Beyond RBAC roles, Akili supports fine-grained capability policies that can be bound to specific agents or roles. Policies define explicit allowlists and denylists for tools, paths, domains, commands, and skills.
+
+```json
+{
+  "policies": {
+    "capabilities": {
+      "restricted-agent": {
+        "allowed_tools": ["file_read", "web_fetch", "git_read"],
+        "denied_tools": ["shell_exec", "code_exec"],
+        "allowed_paths": ["/opt/app/logs", "/tmp"],
+        "denied_paths": ["/etc", "/root"],
+        "allowed_domains": ["api.example.com"],
+        "denied_domains": ["internal.corp.net"],
+        "allowed_commands": ["ls", "cat", "grep"],
+        "denied_commands": ["rm", "dd", "mkfs"],
+        "max_risk_level": "medium",
+        "require_approval": ["git_write"]
+      }
+    },
+    "bindings": {
+      "agent-123": "restricted-agent",
+      "operator": "restricted-agent"
+    }
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `allowed_tools` / `denied_tools` | Explicit tool allowlist/denylist |
+| `allowed_paths` / `denied_paths` | Filesystem path restrictions |
+| `allowed_domains` / `denied_domains` | Network domain restrictions |
+| `allowed_commands` / `denied_commands` | Shell command restrictions |
+| `allowed_skills` / `denied_skills` | Skill-level access control |
+| `max_risk_level` | Maximum permitted risk level |
+| `require_approval` | Tools that always require human approval |
+
+Policies are evaluated after RBAC checks. When no policy is bound, no additional restrictions apply (backward compatible).
+
 ## Sandbox
 
 All external commands execute in isolation:
@@ -1319,6 +1398,66 @@ Set `TELEGRAM_BOT_TOKEN` in your environment. The bot uses long polling by defau
 ```
 
 Set `SIGNAL_GATEWAY_API_URL` and `SIGNAL_GATEWAY_SENDER_NUMBER` in your environment, or configure them in the JSON. Requires a self-hosted [signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api) instance. Approvals use text-based commands (`/approve <id>`, `/deny <id>`) since Signal doesn't support inline buttons.
+
+## Soul Evolution
+
+Akili includes an optional event-sourced self-improvement layer that allows the system to evolve its operational identity over time.
+
+- **Event-sourced architecture** — All soul evolution is recorded as immutable events in an append-only database table
+- **Six evolution categories** — Principles (immutable axioms), learned patterns, operational philosophy, reflections, reasoning strategies, and self-imposed guardrails
+- **Periodic reflection** — LLM-powered self-reflection cycles analyze past behavior and propose improvements at configurable intervals
+- **Security-constrained** — Core principles (Default Deny, Explicit Allow, Auditability) are immutable and seeded on first run. Soul evolutions cannot override hard policy constraints
+- **Materialized snapshot** — Current soul state is rendered as `SOUL.md` in the workspace for human review
+
+### Configuration
+
+```json
+{
+  "soul": {
+    "enabled": true,
+    "reflection_interval_mins": 60,
+    "max_patterns": 100,
+    "max_reflections": 50,
+    "max_strategies": 25
+  }
+}
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | `false` | Enable the soul evolution layer |
+| `reflection_interval_mins` | `60` | Interval between LLM-powered reflection cycles |
+| `max_patterns` | `100` | Maximum stored learned patterns |
+| `max_reflections` | `50` | Maximum stored reflections |
+| `max_strategies` | `25` | Maximum stored reasoning strategies |
+
+## Token Optimization
+
+Akili includes built-in optimizations to reduce LLM token usage without sacrificing capability.
+
+- **Lazy Tool Loading** — Only intent-relevant tools are sent per LLM call, reducing token overhead for large tool registries
+- **Runbook Matching** — Runbooks are scored against conversation context; only top matches above a threshold are injected into the system prompt
+- **Skill Summary Modes** — Control how much skill documentation is included: `"full"`, `"compact"`, or `"none"`
+
+### Configuration
+
+```json
+{
+  "optimization": {
+    "lazy_tool_loading": true,
+    "max_runbook_matches": 2,
+    "runbook_match_threshold": 0.05,
+    "skill_summary_mode": "compact"
+  }
+}
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `lazy_tool_loading` | `false` | Send only intent-relevant tools per LLM call |
+| `max_runbook_matches` | `2` | Maximum runbooks injected per call |
+| `runbook_match_threshold` | `0.05` | Minimum similarity score for runbook injection |
+| `skill_summary_mode` | `"full"` | Skill documentation verbosity: `"full"`, `"compact"`, `"none"` |
 
 ## API Documentation (OpenAPI & Swagger UI)
 
@@ -1569,6 +1708,7 @@ akili/
 │   ├── main.go             # Root command (defaults to gateway mode)
 │   ├── gateway.go          # Gateway mode startup
 │   ├── agent.go            # Agent mode startup (headless task poller)
+│   ├── query.go            # One-shot query command
 │   ├── shared.go           # Shared component initialization
 │   ├── onboarding.go       # Interactive setup wizard
 │   └── version.go          # Version command
@@ -1606,6 +1746,7 @@ akili/
 │   ├── storage/            # Unified storage interface
 │   │   ├── postgres/       # PostgreSQL persistence layer (GORM)
 │   │   └── sqlite/         # SQLite persistence layer (GORM, zero-config default)
+│   ├── soul/               # Event-sourced self-improvement layer
 │   ├── workspace/          # Workspace directory management (~/.akili/)
 │   └── tools/              # Tool interface and implementations
 │       ├── shell/          # Sandboxed shell execution
@@ -1620,6 +1761,7 @@ akili/
 │       └── mcp/            # MCP client bridge (external tool servers)
 ├── configs/                # Configuration files
 │   └── heartbeat-tasks/   # Heartbeat task Markdown files
+├── examples/               # Deployment examples (Ollama, monitoring, etc.)
 ├── runbooks/               # SRE runbook skill definitions (community library)
 ├── skills/                 # Custom skill definition Markdown files
 └── docker/                 # Docker build files (runtime image)
