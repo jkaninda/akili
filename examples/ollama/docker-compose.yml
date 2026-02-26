@@ -1,0 +1,92 @@
+# Akili + Ollama (fully local, no API keys required)
+#
+# Usage:
+#   docker compose up -d
+#   # Wait for Ollama to pull the model (first run takes a few minutes)
+#   docker compose logs -f ollama
+#   # Once the model is ready:
+#   curl http://localhost:8080/healthz
+#
+# Send a query:
+#   curl -X POST http://localhost:8080/v1/query \
+#     -H "Authorization: Bearer dev-key" \
+#     -H "Content-Type: application/json" \
+#     -d '{"message": "Hello, what can you do?"}'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: akili
+      POSTGRES_PASSWORD: akili
+      POSTGRES_DB: akili
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U akili"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # Uncomment the following lines to enable GPU support:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # Pull the model on first run. This init container exits after the model is ready.
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["ollama", "pull", "qwen3:8b"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    restart: "no"
+
+  akili:
+    image: jkaninda/akili:latest
+    # To build from source instead, uncomment:
+    # build:
+    #   context: ../../
+    #   dockerfile: docker/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      AKILI_DB_DSN: postgres://akili:akili@postgres:5432/akili?sslmode=disable
+      AKILI_API_KEYS: dev-key:dev-user
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.json:/etc/akili/config.json:ro
+      - akili-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  pgdata:
+  ollama-data:
+  akili-data:

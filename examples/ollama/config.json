@@ -1,0 +1,108 @@
+{
+  "workspace": "/home/akili/workspace",
+  "data_dir": "/data",
+  "autonomous_mode": false,
+  "storage": {
+    "driver": "postgres",
+    "postgres": {
+      "dsn": "postgres://akili:akili@postgres:5432/akili?sslmode=disable",
+      "max_open_conns": 25,
+      "max_idle_conns": 5,
+      "conn_max_lifetime_s": 1800
+    }
+  },
+  "security": {
+    "default_role": "operator",
+    "roles": {
+      "viewer": {
+        "permissions": ["read_files", "web_search", "database_read"],
+        "max_risk_level": "low"
+      },
+      "operator": {
+        "permissions": ["read_files", "web_search", "shell_exec", "write_files", "git_read", "git_write", "database_read", "create_cronjob", "send_notification"],
+        "max_risk_level": "high",
+        "require_approval": ["shell_exec", "git_write"]
+      },
+      "admin": {
+        "permissions": ["read_files", "web_search", "shell_exec", "write_files", "git_read", "git_write", "code_exec", "database_read", "create_cronjob", "create_alert", "send_notification"],
+        "max_risk_level": "critical",
+        "require_approval": ["code_exec", "create_alert"]
+      }
+    },
+    "user_roles": {
+      "dev-user": "admin"
+    }
+  },
+  "budget": {
+    "default_limit_usd": 10.0
+  },
+  "sandbox": {
+    "type": "process",
+    "max_memory_mb": 512,
+    "max_execution_seconds": 30
+  },
+  "tools": {
+    "file": {
+      "allowed_paths": ["/tmp/akili"],
+      "max_file_size_bytes": 10485760
+    },
+    "web": {
+      "allowed_domains": [],
+      "timeout_seconds": 15
+    },
+    "code": {
+      "allowed_languages": ["python3", "sh"]
+    },
+    "git": {
+      "allowed_paths": []
+    },
+    "mcp": []
+  },
+  "gateways": {
+    "cli": {
+      "enabled": false
+    },
+    "http": {
+      "enabled": true,
+      "listen_addr": ":8080",
+      "enable_docs": true,
+      "rate_limit": {
+        "requests_per_minute": 60,
+        "burst_size": 10
+      }
+    },
+      "telegram": {
+      "enabled": false,
+      "bot_token": "",
+      "webhook_url": "",
+      "listen_addr": ":3001",
+      "allowed_users": [1110002364],
+      "user_mapping": {
+        "1110002364": "telegram-user"
+      },
+      "poll_timeout_seconds": 30,
+      "rate_limit": {
+        "requests_per_minute": 30,
+        "burst_size": 5
+      }
+    }
+  },
+  "providers": {
+    "default": "ollama",
+    "ollama": {
+      "model": "qwen3:8b",
+      "base_url": "http://ollama:11434"
+    }
+  },
+  "memory": {
+    "enabled": true,
+    "max_history_messages": 100,
+    "max_message_bytes": 32768
+  },
+  "observability": {
+    "metrics": {
+      "enabled": true,
+      "path": "/metrics"
+    }
+  }
+}
