@@ -53,6 +53,18 @@ func RenderSkillSummaryWithPerformance(defs []SkillDefinition, perf map[string]S
 	return sb.String()
 }
 
+// RenderSkillSummaryCompact returns a single-line comma-separated list of
+func RenderSkillSummaryCompact(defs []SkillDefinition) string {
+	if len(defs) == 0 {
+		return ""
+	}
+	names := make([]string, len(defs))
+	for i, def := range defs {
+		names[i] = def.Name
+	}
+	return "Available skills: " + strings.Join(names, ", ") + "."
+}
+
 // firstSentence returns the first sentence from a string (up to the first period + space or newline).
 func firstSentence(s string) string {
 	s = strings.TrimSpace(s)

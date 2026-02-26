@@ -17,12 +17,13 @@ var readOnlyTools = []string{"file_read", "web_fetch", "git_read", "browser"}
 
 // DefaultAgentFactory creates role-specific agent.Orchestrator instances.
 type DefaultAgentFactory struct {
-	provider    llm.Provider
-	security    security.SecurityManager
-	approvalMgr approval.ApprovalManager
-	obs         *observability.Observability
-	toolReg     *tools.Registry
-	logger      *slog.Logger
+	provider             llm.Provider
+	security             security.SecurityManager
+	approvalMgr          approval.ApprovalManager
+	obs                  *observability.Observability
+	toolReg              *tools.Registry
+	logger               *slog.Logger
+	recoveryAllowedTools []string // Extra tools for the diagnostician role.
 }
 
 // NewDefaultAgentFactory creates an AgentFactory backed by the given components.
@@ -42,6 +43,12 @@ func NewDefaultAgentFactory(
 		toolReg:     toolReg,
 		logger:      logger,
 	}
+}
+
+// WithRecoveryTools configures extra tools available to the diagnostician role.
+func (f *DefaultAgentFactory) WithRecoveryTools(toolNames []string) *DefaultAgentFactory {
+	f.recoveryAllowedTools = toolNames
+	return f
 }
 
 func (f *DefaultAgentFactory) Create(role AgentRole) (RoleAgent, error) {
@@ -90,6 +97,21 @@ func (f *DefaultAgentFactory) toolRegistryForRole(role AgentRole) *tools.Registr
 		}
 		return reg
 
+	case RoleDiagnostician:
+		// Diagnostician gets read-only tools plus any configured recovery tools.
+		reg := tools.NewRegistry()
+		for _, name := range readOnlyTools {
+			if t := f.toolReg.Get(name); t != nil {
+				reg.Register(t)
+			}
+		}
+		for _, name := range f.recoveryAllowedTools {
+			if t := f.toolReg.Get(name); t != nil {
+				reg.Register(t)
+			}
+		}
+		return reg
+
 	case RoleOrchestrator, RolePlanner, RoleCompliance:
 		// No tools — LLM-only roles.
 		return nil
@@ -107,7 +129,7 @@ var _ AgentFactory = (*DefaultAgentFactory)(nil)
 // ValidateRole checks if the given role is a known agent role.
 func ValidateRole(role AgentRole) error {
 	switch role {
-	case RoleOrchestrator, RolePlanner, RoleResearcher, RoleExecutor, RoleCompliance:
+	case RoleOrchestrator, RolePlanner, RoleResearcher, RoleExecutor, RoleCompliance, RoleDiagnostician:
 		return nil
 	default:
 		return fmt.Errorf("unknown agent role: %s", role)

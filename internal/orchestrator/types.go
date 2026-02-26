@@ -17,11 +17,12 @@ import (
 type AgentRole string
 
 const (
-	RoleOrchestrator AgentRole = "orchestrator" // Coordinates workflow execution.
-	RolePlanner      AgentRole = "planner"      // Decomposes goals into tasks.
-	RoleResearcher   AgentRole = "researcher"   // Gathers information (read-only).
-	RoleExecutor     AgentRole = "executor"     // Runs tools with side effects.
-	RoleCompliance   AgentRole = "compliance"   // Validates security/policy.
+	RoleOrchestrator  AgentRole = "orchestrator"  // Coordinates workflow execution.
+	RolePlanner       AgentRole = "planner"       // Decomposes goals into tasks.
+	RoleResearcher    AgentRole = "researcher"    // Gathers information (read-only).
+	RoleExecutor      AgentRole = "executor"      // Runs tools with side effects.
+	RoleCompliance    AgentRole = "compliance"    // Validates security/policy.
+	RoleDiagnostician AgentRole = "diagnostician" // Investigates failures, proposes recovery.
 )
 
 // WorkflowStatus represents the lifecycle state of a workflow.
@@ -43,8 +44,9 @@ const (
 	TaskBlocked   TaskStatus = "blocked" // Waiting on dependencies.
 	TaskRunning   TaskStatus = "running"
 	TaskCompleted TaskStatus = "completed"
-	TaskFailed    TaskStatus = "failed"
-	TaskSkipped   TaskStatus = "skipped" // Skipped due to upstream failure.
+	TaskFailed     TaskStatus = "failed"
+	TaskRecovering TaskStatus = "recovering" // Recovery/diagnosis in progress.
+	TaskSkipped    TaskStatus = "skipped"    // Skipped due to upstream failure.
 )
 
 // TaskMode controls how child tasks of a parent are scheduled.
@@ -66,6 +68,8 @@ const (
 	MsgComplianceCheck  MessageType = "compliance_check"  // Executor -> compliance.
 	MsgComplianceResult MessageType = "compliance_result" // Compliance -> executor.
 	MsgPlanProposal     MessageType = "plan_proposal"     // Planner -> orchestrator.
+	MsgRecoveryPlan     MessageType = "recovery_plan"    // Diagnostician -> orchestrator.
+	MsgRecoveryResult   MessageType = "recovery_result"  // Diagnostician -> orchestrator.
 	MsgError            MessageType = "error"
 )
 
@@ -112,9 +116,12 @@ type Task struct {
 	Error        string
 	CostUSD      float64
 	TokensUsed   int
-	ClaimedBy    string     // Agent instance ID that claimed this task.
-	ClaimedAt    *time.Time // When the claim was made/refreshed.
-	Metadata     map[string]any
+	ClaimedBy      string     // Agent instance ID that claimed this task.
+	ClaimedAt      *time.Time // When the claim was made/refreshed.
+	RetryCount     int        // Number of times this task has been retried.
+	MaxRetries     int        // Per-task max retries (0 = use workflow default).
+	OriginalTaskID *uuid.UUID // For diagnostician tasks: links back to the failed task.
+	Metadata       map[string]any
 }
 
 // AgentMessage is the structured inter-agent communication format.

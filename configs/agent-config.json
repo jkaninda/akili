@@ -1,0 +1,94 @@
+{
+  "workspace": "data/workspace",
+  "data_dir": "data",
+  "security": {
+    "default_role": "operator",
+    "roles": {
+      "viewer": {
+        "permissions": ["read_files", "web_search"],
+        "max_risk_level": "low",
+        "require_approval": []
+      },
+      "operator": {
+        "permissions": ["read_files", "web_search", "shell_exec", "write_files", "git_read", "git_write", "browser_navigate"],
+        "max_risk_level": "high",
+        "require_approval": ["shell_exec", "git_write"]
+      },
+      "admin": {
+        "permissions": ["read_files", "web_search", "shell_exec", "write_files", "git_read", "git_write", "code_exec", "browser_navigate"],
+        "max_risk_level": "critical",
+        "require_approval": ["code_exec"]
+      }
+    },
+    "user_roles": {}
+  },
+  "budget": {
+    "default_limit_usd": 10.0
+  },
+  "sandbox": {
+    "type": "process",
+    "max_cpu_cores": 1,
+    "max_memory_mb": 512,
+    "max_execution_seconds": 30,
+    "network_allowed": false
+  },
+  "tools": {
+    "file": {
+      "allowed_paths": ["/tmp/akili"],
+      "max_file_size_bytes": 10485760
+    },
+    "web": {
+      "allowed_domains": [],
+      "max_response_bytes": 5242880,
+      "timeout_seconds": 15
+    },
+    "browser": {
+      "allowed_domains": [],
+      "max_response_bytes": 5242880,
+      "timeout_seconds": 15,
+      "max_navigations_per_call": 5
+    },
+    "code": {
+      "allowed_languages": ["python3", "sh"]
+    }
+  },
+  "providers": {
+    "default": "anthropic",
+    "fallback": ["openai"],
+    "anthropic": {
+      "model": "claude-sonnet-4-5-20250929"
+    },
+    "openai": {
+      "model": "gpt-4o"
+    }
+  },
+  "runtime": {
+    "mode": "agent",
+    "agent": {
+      "agent_id": "worker-1",
+      "gateway_url": "ws://localhost:8080/ws/agents",
+      "token": "change-me",
+      "name": "",
+      "version": "",
+      "roles": [],
+      "capabilities": [],
+      "environment_scope": "development",
+      "max_concurrent_tasks": 5,
+      "task_timeout_seconds": 300,
+      "heartbeat_interval_seconds": 30,
+      "reconnect_interval_seconds": 5
+    }
+  },
+  "approval": {
+    "ttl_seconds": 300,
+    "auto_approval": {
+      "enabled": false
+    }
+  },
+  "optimization": {
+    "lazy_tool_loading": true,
+    "max_runbook_matches": 3,
+    "runbook_threshold": 0.3,
+    "skill_summary_mode": "compact"
+  }
+}

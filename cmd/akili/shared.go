@@ -22,13 +22,13 @@ import (
 	"github.com/jkaninda/akili/internal/sandbox"
 	"github.com/jkaninda/akili/internal/secrets"
 	"github.com/jkaninda/akili/internal/security"
+	"github.com/jkaninda/akili/internal/soul"
 	"github.com/jkaninda/akili/internal/storage"
 	pgstore "github.com/jkaninda/akili/internal/storage/postgres"
 	sqlitestore "github.com/jkaninda/akili/internal/storage/sqlite"
 	"github.com/jkaninda/akili/internal/tools"
 	"github.com/jkaninda/akili/internal/tools/browser"
 	"github.com/jkaninda/akili/internal/tools/code"
-	"github.com/jkaninda/akili/internal/tools/database"
 	"github.com/jkaninda/akili/internal/tools/file"
 	"github.com/jkaninda/akili/internal/tools/git"
 	infratools "github.com/jkaninda/akili/internal/tools/infra"
@@ -38,20 +38,46 @@ import (
 	"github.com/jkaninda/akili/internal/workspace"
 )
 
-const systemPrompt = `You are Akili, a security-first AI assistant for DevOps, SRE and Platform teams.
-You help with incident triage, infrastructure automation, and operational tasks.
-Always prioritize safety: prefer read-only actions, explain risks before suggesting changes,
-and never execute destructive operations without explicit confirmation.
+const systemPrompt = `You are Akili, an autonomous AI operator for DevOps, SRE and Platform teams.
+You are not an assistant. You are not a chatbot.
+You are a controlled, auditable, production-safe operator.
+
+Your purpose is to protect infrastructure, maintain reliability, reduce operational risk,
+and automate safely within enforced policy boundaries.
+
+Core axioms:
+- Default Deny: if something is ambiguous, unsafe, or outside explicit authorization, do not execute it.
+- Explicit Allow: act only when permission, scope, and intent are clear.
+- Auditability Over Convenience: every action must be explainable and justifiable.
+- Reliability Over Speed: fast and wrong is worse than slow and correct.
+- Security Before Automation: automation that weakens control is a failure.
+
+Before acting, classify intent (read-only, mutating, destructive, investigative), assess risk
+(blast radius, privilege level, reversibility, environment, data sensitivity), and decide on
+an execution strategy. For high-risk actions, propose a plan and request confirmation.
 
 You have access to tools for executing shell commands, reading/writing files, querying databases,
-fetching web content, executing code, and performing git operations. Use tools when the user's
-request requires interacting with external systems. Always explain what you intend to do before
-using a tool.
+fetching web content, executing code, and performing git operations. Use tools when the task
+requires interacting with external systems. Explain what you intend to do before using a tool.
 
 When a user refers to infrastructure by name or alias (e.g., "VM10", "prod-k8s", "staging-db"),
 use infra_lookup to resolve the node first, then infra_exec to run commands on it.
 Never ask for passwords, SSH keys, or other credentials — they are resolved automatically.
 Never include raw credentials in any command parameter.`
+
+const autonomousModePromptSection = `
+
+## Autonomous Mode
+You are operating in autonomous mode. You may execute tools — including high-risk operations
+like shell_exec — without waiting for human approval. Use this capability responsibly:
+
+- Investigate issues independently: gather evidence, diagnose root causes, and attempt remediation.
+- Execute operations decisively when the intent is clear and the action is within policy.
+- All actions are still subject to RBAC permissions, security policies, budget limits, and sandbox constraints.
+- Every action is logged and auditable — act as if every decision will be reviewed.
+- Prefer the least-destructive approach when multiple options exist.
+- If an action could cause irreversible damage (data loss, production outage), proceed only when
+  the risk is justified by the severity of the issue being addressed.`
 
 // SharedComponents holds all initialized subsystems that both gateway and
 // agent modes require. Built once by initShared, torn down by Cleanup.
@@ -71,6 +97,7 @@ type SharedComponents struct {
 	AgentCore      agent.Agent
 	Dispatcher     *notification.Dispatcher // nil = notifications disabled.
 	PolicyEnforcer *security.PolicyEnforcer // nil = no policy enforcement.
+	SoulManager    *soul.Manager            // nil = soul disabled.
 	OrgID          uuid.UUID                // Resolved org ID.
 
 	cleanups []func()
@@ -275,19 +302,6 @@ func initShared(cfg *config.Config, logger *slog.Logger) (*SharedComponents, err
 	toolReg.Register(git.NewTool(sbxIface, logger))
 	toolReg.Register(git.NewWriteTool(sbxIface, logger))
 
-	// Database read-only tool.
-	dbDSN := cfg.Tools.Database.DSN
-	if envDSN := os.Getenv("AKILI_TOOL_DB_DSN"); envDSN != "" {
-		dbDSN = envDSN
-	}
-	if dbDSN != "" {
-		toolReg.Register(database.NewTool(database.Config{
-			DSN:            dbDSN,
-			MaxRows:        cfg.Tools.Database.MaxRows,
-			TimeoutSeconds: cfg.Tools.Database.TimeoutSeconds,
-		}, logger))
-	}
-
 	toolReg.Register(code.NewTool(code.Config{
 		AllowedLanguages: cfg.Tools.Code.AllowedLanguages,
 	}, sbxIface, logger))
@@ -407,7 +421,11 @@ func initShared(cfg *config.Config, logger *slog.Logger) (*SharedComponents, err
 	}
 
 	// Agent core.
-	agentCore := agent.NewOrchestrator(llmProvider, systemPrompt, logger).
+	agentSystemPrompt := systemPrompt
+	if cfg.AutonomousMode {
+		agentSystemPrompt += autonomousModePromptSection
+	}
+	agentCore := agent.NewOrchestrator(llmProvider, agentSystemPrompt, logger).
 		WithSecurity(securityIface).
 		WithTools(toolReg).
 		WithApproval(approvalMgr).
@@ -428,7 +446,7 @@ func initShared(cfg *config.Config, logger *slog.Logger) (*SharedComponents, err
 	}
 
 	// Tool result caching for read-only tools.
-	readOnlyTools := []string{"file_read", "web_fetch", "git_read", "database_read", "infra_lookup", "browser_fetch"}
+	readOnlyTools := []string{"file_read", "web_fetch", "git_read", "infra_lookup", "browser_fetch"}
 	agentCore.WithToolCache(agent.DefaultToolCacheTTL, readOnlyTools)
 	logger.Debug("tool result caching enabled", slog.Int("read_only_tools", len(readOnlyTools)))
 
@@ -436,6 +454,12 @@ func initShared(cfg *config.Config, logger *slog.Logger) (*SharedComponents, err
 	if cfg.Orchestrator != nil && cfg.Orchestrator.PlanningEnabled {
 		agentCore.WithPlanning(true)
 		logger.Debug("ReAct planning enabled")
+	}
+
+	// Autonomous mode.
+	if cfg.AutonomousMode {
+		agentCore.WithAutonomousMode(true)
+		logger.Warn("autonomous mode enabled — high-risk tools will execute without human approval")
 	}
 
 	// Smart auto approval.
@@ -453,7 +477,283 @@ func initShared(cfg *config.Config, logger *slog.Logger) (*SharedComponents, err
 		)
 	}
 
+	// Token optimization.
+	if cfg.Optimization != nil {
+		optCfg := cfg.Optimization
+		agentCore.WithOptimization(
+			optCfg.LazyToolLoading,
+			optCfg.MaxRunbookMatchesOrDefault(),
+			optCfg.RunbookThresholdOrDefault(),
+			optCfg.SkillSummaryModeOrDefault(),
+		)
+		logger.Debug("token optimizations configured",
+			slog.Bool("lazy_tools", optCfg.LazyToolLoading),
+			slog.Int("max_runbooks", optCfg.MaxRunbookMatchesOrDefault()),
+			slog.Float64("runbook_threshold", optCfg.RunbookThresholdOrDefault()),
+			slog.String("skill_summary_mode", optCfg.SkillSummaryModeOrDefault()),
+		)
+	}
+
+	// Soul subsystem.
+	if cfg.Soul != nil && cfg.Soul.Enabled {
+		soulStore := store.Soul()
+		soulDir := ws.SoulDir()
+		soulCfg := soul.Config{
+			Enabled:                cfg.Soul.Enabled,
+			ReflectionIntervalMins: cfg.Soul.ReflectionIntervalMins,
+			MaxPatternsPerCategory: cfg.Soul.MaxPatternsPerCategory,
+			MaxReflections:         cfg.Soul.MaxReflections,
+			MaxStrategies:          cfg.Soul.MaxStrategies,
+		}
+		soulMgr := soul.NewManager(soulStore, sc.OrgID, soulDir, llmProvider, soulCfg, logger)
+		if err := soulMgr.Load(context.Background()); err != nil {
+			logger.Warn("soul loading failed, continuing without soul",
+				slog.String("error", err.Error()))
+		} else {
+			// Inject soul context into agent system prompt.
+			agentCore.WithSoulContext(soulMgr.CurrentPromptContext())
+
+			// Start reflection loop.
+			cancelReflection := soulMgr.StartReflectionLoop(context.Background())
+			sc.addCleanup(func() { cancelReflection() })
+
+			sc.SoulManager = soulMgr
+			logger.Info("soul initialized",
+				slog.Int("version", soulMgr.Current().Version),
+			)
+		}
+	}
+
 	sc.AgentCore = agentCore
+
+	return sc, nil
+}
+
+// initSharedForWSAgent performs initialization for WebSocket agent mode only.
+// Unlike initShared, this does NOT initialize a database, run migrations, or
+// start DB-dependent subsystems (soul, notifications, infrastructure tools).
+// All security enforcement uses in-memory state; the gateway is the authority
+// for persistent RBAC, budget, and audit.
+func initSharedForWSAgent(cfg *config.Config, logger *slog.Logger) (*SharedComponents, error) {
+	sc := &SharedComponents{
+		Config: cfg,
+		Logger: logger,
+	}
+
+	// Workspace.
+	ws, err := initWorkspace(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("initializing workspace: %w", err)
+	}
+	sc.Workspace = ws
+	logger.Debug("workspace initialized", slog.String("root", ws.Root))
+
+	// Ensure data directory exists (for audit log files).
+	dataDir := cfg.ResolvedDataDir()
+	if err := os.MkdirAll(dataDir, 0750); err != nil {
+		return nil, fmt.Errorf("creating data directory %s: %w", dataDir, err)
+	}
+
+	// Resolve audit log path.
+	if cfg.Security.AuditLogPath == "" {
+		cfg.Security.AuditLogPath = cfg.AuditLogPath()
+	}
+
+	// Warn if storage is configured but will be ignored.
+	if cfg.Storage != nil && (cfg.Storage.Postgres != nil || cfg.Storage.SQLite != nil) {
+		logger.Warn("storage configuration ignored in WebSocket agent mode — no database required")
+	}
+
+	// Observability.
+	obs, err := observability.New(cfg.Observability, logger)
+	if err != nil {
+		return nil, fmt.Errorf("initializing observability: %w", err)
+	}
+	sc.Obs = obs
+	sc.addCleanup(func() {
+		if obs != nil {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			obs.Shutdown(shutdownCtx)
+		}
+	})
+
+	// LLM provider.
+	llmProvider, err := newLLMProvider(cfg, logger)
+	if err != nil {
+		sc.Cleanup()
+		return nil, fmt.Errorf("initializing LLM provider: %w", err)
+	}
+	if obs != nil && obs.Metrics != nil {
+		llmProvider = observability.NewInstrumentedProvider(
+			llmProvider, obs.Metrics, obs.TracerOrNil(), obs.Anomaly,
+		)
+	}
+	sc.LLMProvider = llmProvider
+
+	// In-memory security (no database required).
+	secMgr, secCleanup, err := initInMemorySecurity(cfg, logger)
+	if err != nil {
+		sc.Cleanup()
+		return nil, fmt.Errorf("initializing in-memory security: %w", err)
+	}
+	sc.addCleanup(secCleanup)
+
+	var securityIface security.SecurityManager = secMgr
+	if obs != nil && obs.Metrics != nil {
+		securityIface = observability.NewInstrumentedSecurityManager(secMgr, obs.Metrics, obs.TracerOrNil())
+	}
+	sc.Security = securityIface
+
+	// Security policies (in-memory, no DB).
+	if cfg.Policies != nil && len(cfg.Policies.Policies) > 0 {
+		policies := make([]security.SecurityPolicy, len(cfg.Policies.Policies))
+		for i, p := range cfg.Policies.Policies {
+			policies[i] = security.SecurityPolicy{
+				Name:            p.Name,
+				AllowedTools:    p.AllowedTools,
+				DeniedTools:     p.DeniedTools,
+				AllowedPaths:    p.AllowedPaths,
+				DeniedPaths:     p.DeniedPaths,
+				AllowedDomains:  p.AllowedDomains,
+				DeniedDomains:   p.DeniedDomains,
+				AllowedCommands: p.AllowedCommands,
+				DeniedCommands:  p.DeniedCommands,
+				MaxRiskLevel:    p.MaxRiskLevel,
+				RequireApproval: p.RequireApproval,
+				AllowedSkills:   p.AllowedSkills,
+				DeniedSkills:    p.DeniedSkills,
+			}
+		}
+		sc.PolicyEnforcer = security.NewPolicyEnforcer(policies, cfg.Policies.Bindings, logger)
+	}
+
+	// Sandbox.
+	sbx, err := initSandbox(cfg, logger)
+	if err != nil {
+		sc.Cleanup()
+		return nil, fmt.Errorf("initializing sandbox: %w", err)
+	}
+	var sbxIface sandbox.Sandbox = sbx
+	if obs != nil && obs.Metrics != nil {
+		sbxType := cfg.Sandbox.Type
+		if sbxType == "" {
+			sbxType = "process"
+		}
+		sbxIface = observability.NewInstrumentedSandbox(sbx, sbxType, obs.Metrics, obs.TracerOrNil(), obs.Anomaly)
+	}
+	sc.Sandbox = sbxIface
+
+	// Tool registry (no infrastructure tools — they require DB).
+	toolReg := tools.NewRegistry()
+	toolReg.Register(shell.NewTool(sbxIface, logger))
+	toolReg.Register(file.NewReadTool(file.Config{
+		AllowedPaths:     cfg.Tools.File.AllowedPaths,
+		MaxFileSizeBytes: cfg.Tools.File.MaxFileSizeBytes,
+	}, logger))
+	toolReg.Register(file.NewWriteTool(file.Config{
+		AllowedPaths:     cfg.Tools.File.AllowedPaths,
+		MaxFileSizeBytes: cfg.Tools.File.MaxFileSizeBytes,
+	}, logger))
+	toolReg.Register(web.NewTool(web.Config{
+		AllowedDomains:   cfg.Tools.Web.AllowedDomains,
+		MaxResponseBytes: cfg.Tools.Web.MaxResponseBytes,
+		TimeoutSeconds:   cfg.Tools.Web.TimeoutSeconds,
+	}, logger))
+	toolReg.Register(browser.NewTool(browser.Config{
+		AllowedDomains:        cfg.Tools.Browser.AllowedDomains,
+		MaxResponseBytes:      cfg.Tools.Browser.MaxResponseBytes,
+		TimeoutSeconds:        cfg.Tools.Browser.TimeoutSeconds,
+		MaxNavigationsPerCall: cfg.Tools.Browser.MaxNavigationsPerCall,
+	}, logger))
+	toolReg.Register(git.NewTool(sbxIface, logger))
+	toolReg.Register(git.NewWriteTool(sbxIface, logger))
+	toolReg.Register(code.NewTool(code.Config{
+		AllowedLanguages: cfg.Tools.Code.AllowedLanguages,
+	}, sbxIface, logger))
+
+	// MCP tool servers (no DB required).
+	if len(cfg.Tools.MCP) > 0 {
+		mcpBridge := mcptools.NewBridge(logger)
+		mcpCtx, mcpCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		for _, mcpCfg := range cfg.Tools.MCP {
+			mcpToolList, mcpErr := mcpBridge.ConnectAndDiscover(mcpCtx, mcpCfg)
+			if mcpErr != nil {
+				logger.Error("MCP server failed, skipping",
+					slog.String("server", mcpCfg.Name),
+					slog.String("error", mcpErr.Error()),
+				)
+				continue
+			}
+			for _, t := range mcpToolList {
+				toolReg.Register(t)
+			}
+		}
+		mcpCancel()
+		sc.addCleanup(mcpBridge.Close)
+	}
+
+	sc.ToolReg = toolReg
+	logger.Debug("tools registered (ws agent mode)", slog.Any("tools", toolReg.List()))
+
+	// Approval manager (in-memory).
+	approvalTTL := 5 * time.Minute
+	if cfg.Approval.TTLSeconds > 0 {
+		approvalTTL = time.Duration(cfg.Approval.TTLSeconds) * time.Second
+	}
+	sc.ApprovalMgr = approval.NewManager(approvalTTL, logger)
+
+	// Agent core (no conversation store, no soul).
+	agentSystemPrompt := systemPrompt
+	if cfg.AutonomousMode {
+		agentSystemPrompt += autonomousModePromptSection
+	}
+	agentCore := agent.NewOrchestrator(llmProvider, agentSystemPrompt, logger).
+		WithSecurity(securityIface).
+		WithTools(toolReg).
+		WithApproval(sc.ApprovalMgr).
+		WithObservability(obs).
+		WithPolicyEnforcer(sc.PolicyEnforcer)
+
+	// Tool result caching.
+	readOnlyTools := []string{"file_read", "web_fetch", "git_read", "browser_fetch"}
+	agentCore.WithToolCache(agent.DefaultToolCacheTTL, readOnlyTools)
+
+	// ReAct planning.
+	if cfg.Orchestrator != nil && cfg.Orchestrator.PlanningEnabled {
+		agentCore.WithPlanning(true)
+	}
+
+	// Autonomous mode.
+	if cfg.AutonomousMode {
+		agentCore.WithAutonomousMode(true)
+	}
+
+	// Smart auto approval.
+	if cfg.Approval.AutoApproval != nil && cfg.Approval.AutoApproval.Enabled {
+		autoApprover := approval.NewAutoApprover(approval.AutoApprovalConfig{
+			Enabled:           cfg.Approval.AutoApproval.Enabled,
+			MaxAutoApprovals:  cfg.Approval.AutoApproval.MaxAutoApprovals,
+			AllowedTools:      cfg.Approval.AutoApproval.AllowedTools,
+			RequiredApprovals: cfg.Approval.AutoApproval.RequiredApprovals,
+			WindowHours:       cfg.Approval.AutoApproval.WindowHours,
+		}, logger)
+		agentCore.WithAutoApprover(autoApprover)
+	}
+
+	// Token optimization.
+	if cfg.Optimization != nil {
+		optCfg := cfg.Optimization
+		agentCore.WithOptimization(
+			optCfg.LazyToolLoading,
+			optCfg.MaxRunbookMatchesOrDefault(),
+			optCfg.RunbookThresholdOrDefault(),
+			optCfg.SkillSummaryModeOrDefault(),
+		)
+	}
+
+	sc.AgentCore = agentCore
+	logger.Info("websocket agent initialized (no database, in-memory security)")
 
 	return sc, nil
 }

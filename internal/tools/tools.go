@@ -145,3 +145,46 @@ func ToLLMDefinitions(reg *Registry) []llm.ToolDefinition {
 	}
 	return defs
 }
+
+// toolCategories maps built-in tool names to intent categories.
+// Used by ToLLMDefinitionsForIntent to filter tool definitions per call.
+var toolCategories = map[string]string{
+	// Core: always included regardless of intent.
+	"shell_exec": "core",
+	"file_read":  "core",
+	"file_write": "core",
+	"web_fetch":  "core",
+
+	// Investigation: included for read/analysis queries.
+	"git_read":      "investigation",
+	"browser": "investigation",
+	"code_exec":     "investigation",
+
+	// Infrastructure: included when infra keywords detected.
+	"infra_lookup": "infra",
+	"infra_manage": "infra",
+	"infra_exec":   "infra",
+
+	// Git mutation: included when git-write intent detected.
+	"git_write": "git_write",
+}
+
+// ToLLMDefinitionsForIntent returns tool definitions filtered by detected
+// intent categories. The "core" category is always included. Tools not
+// present in toolCategories (e.g. MCP tools) are included by default.
+func ToLLMDefinitionsForIntent(reg *Registry, activeCategories map[string]bool) []llm.ToolDefinition {
+	all := reg.All()
+	defs := make([]llm.ToolDefinition, 0, len(all))
+	for _, t := range all {
+		cat, known := toolCategories[t.Name()]
+		// Include if: core, category is active, or unknown tool (forward-compat).
+		if !known || cat == "core" || activeCategories[cat] {
+			defs = append(defs, llm.ToolDefinition{
+				Name:        t.Name(),
+				Description: t.Description(),
+				InputSchema: t.InputSchema(),
+			})
+		}
+	}
+	return defs
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/jkaninda/akili/internal/orchestrator"
 	"github.com/jkaninda/akili/internal/scheduler"
 	"github.com/jkaninda/akili/internal/security"
+	"github.com/jkaninda/akili/internal/soul"
 	"github.com/jkaninda/akili/internal/storage"
 )
 
@@ -42,6 +43,7 @@ type Store struct {
 	roles            security.RoleStore
 	budgets          security.BudgetStore
 	audit            security.AuditStore
+	soulStore        soul.SoulStore
 
 	// In-memory agent registry.
 	agentsMu sync.RWMutex
@@ -225,6 +227,15 @@ func (s *Store) Audit() security.AuditStore {
 		s.audit = NewAuditRepository(s.pgDB.GormDB())
 	}
 	return s.audit
+}
+
+func (s *Store) Soul() soul.SoulStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.soulStore == nil {
+		s.soulStore = NewSoulRepository(s.pgDB.GormDB())
+	}
+	return s.soulStore
 }
 
 // --- Agent Registry (in-memory) ---

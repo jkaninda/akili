@@ -35,6 +35,14 @@ type ConnectedAgent struct {
 	mu sync.Mutex
 }
 
+// StaleAgent holds information about an evicted stale agent.
+type StaleAgent struct {
+	AgentID     string
+	Conn        *websocket.Conn
+	LastSeen    time.Time
+	ConnectedAt time.Time
+}
+
 // Registry manages connected WebSocket agents.
 type Registry struct {
 	mu     sync.RWMutex
@@ -52,8 +60,22 @@ func NewRegistry(logger *slog.Logger) *Registry {
 
 // Register adds or updates an agent in the registry.
 func (r *Registry) Register(info protocol.AgentCapabilities, conn *websocket.Conn) {
+	r.RegisterOrReplace(info, conn)
+}
+
+// RegisterOrReplace registers the agent and returns the old connection if one
+// existed with the same agent_id, so the caller can close it.
+func (r *Registry) RegisterOrReplace(info protocol.AgentCapabilities, conn *websocket.Conn) *websocket.Conn {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	var oldConn *websocket.Conn
+	if existing, ok := r.agents[info.AgentID]; ok {
+		oldConn = existing.Conn
+		r.logger.Warn("duplicate agent connection, replacing",
+			slog.String("agent_id", info.AgentID),
+		)
+	}
 
 	now := time.Now().UTC()
 	r.agents[info.AgentID] = &ConnectedAgent{
@@ -69,14 +91,21 @@ func (r *Registry) Register(info protocol.AgentCapabilities, conn *websocket.Con
 		slog.String("model", info.Model),
 		slog.Int("skills", len(info.Skills)),
 	)
+	return oldConn
 }
 
-// Deregister removes an agent from the registry.
-func (r *Registry) Deregister(agentID string) {
+// Deregister removes an agent from the registry only if the stored connection
+// matches the given one. This prevents a race where an old goroutine removes
+// a newer connection registered under the same agent_id.
+func (r *Registry) Deregister(agentID string, conn *websocket.Conn) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if _, ok := r.agents[agentID]; ok {
+	existing, ok := r.agents[agentID]
+	if !ok {
+		return
+	}
+	if existing.Conn == conn {
 		delete(r.agents, agentID)
 		r.logger.Info("agent deregistered", slog.String("agent_id", agentID))
 	}
@@ -131,6 +160,7 @@ func (r *Registry) Route(skills []string) (*ConnectedAgent, error) {
 }
 
 // UpdateHeartbeat refreshes the last-seen time for an agent.
+// If activeTasks is negative, only the last-seen time is updated (task count unchanged).
 func (r *Registry) UpdateHeartbeat(agentID string, activeTasks int) {
 	r.mu.RLock()
 	a, ok := r.agents[agentID]
@@ -142,11 +172,13 @@ func (r *Registry) UpdateHeartbeat(agentID string, activeTasks int) {
 
 	a.mu.Lock()
 	a.LastSeen = time.Now().UTC()
-	a.ActiveTasks = activeTasks
-	if activeTasks > 0 {
-		a.Status = AgentBusy
-	} else {
-		a.Status = AgentIdle
+	if activeTasks >= 0 {
+		a.ActiveTasks = activeTasks
+		if activeTasks > 0 {
+			a.Status = AgentBusy
+		} else {
+			a.Status = AgentIdle
+		}
 	}
 	a.mu.Unlock()
 }
@@ -198,6 +230,35 @@ func (r *Registry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.agents)
+}
+
+// RemoveStale removes agents whose LastSeen is older than the given threshold.
+// Returns the removed agents so the caller can close their connections.
+func (r *Registry) RemoveStale(threshold time.Duration) []StaleAgent {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	cutoff := time.Now().UTC().Add(-threshold)
+	var stale []StaleAgent
+
+	for id, a := range r.agents {
+		a.mu.Lock()
+		lastSeen := a.LastSeen
+		connectedAt := a.ConnectedAt
+		conn := a.Conn
+		a.mu.Unlock()
+
+		if lastSeen.Before(cutoff) {
+			stale = append(stale, StaleAgent{
+				AgentID:     id,
+				Conn:        conn,
+				LastSeen:    lastSeen,
+				ConnectedAt: connectedAt,
+			})
+			delete(r.agents, id)
+		}
+	}
+	return stale
 }
 
 // hasAllSkills checks if agentSkills contains all of the required skills.

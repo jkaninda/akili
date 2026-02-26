@@ -20,9 +20,10 @@ func init() {
 
 // Config is the root configuration for Akili.
 type Config struct {
-	Workspace      string                `json:"workspace,omitempty" yaml:"workspace,omitempty"` // Workspace root. Default: ~/.akili/workspace. Override: AKILI_WORKSPACE env var.
-	DataDir        string                `json:"data_dir,omitempty" yaml:"data_dir,omitempty"`   // Persistent data directory. Default: ~/.akili/data. Override: AKILI_DATA_DIR env var.
-	Storage        *StorageConfig        `json:"storage,omitempty" yaml:"storage,omitempty"`     // nil = SQLite default (derived from workspace)
+	Workspace      string                `json:"workspace,omitempty" yaml:"workspace,omitempty"`           // Workspace root. Default: ~/.akili/workspace. Override: AKILI_WORKSPACE env var.
+	DataDir        string                `json:"data_dir,omitempty" yaml:"data_dir,omitempty"`             // Persistent data directory. Default: ~/.akili/data. Override: AKILI_DATA_DIR env var.
+	AutonomousMode bool                  `json:"autonomous_mode,omitempty" yaml:"autonomous_mode,omitempty"` // When true, bypass human approval for high-risk tools. RBAC, policies, budgets, and audit logging remain enforced. Override: AKILI_AUTONOMOUS_MODE env var.
+	Storage        *StorageConfig        `json:"storage,omitempty" yaml:"storage,omitempty"`               // nil = SQLite default (derived from workspace)
 	Security       SecurityConfig        `json:"security" yaml:"security"`
 	Budget         BudgetConfig          `json:"budget" yaml:"budget"`
 	Sandbox        SandboxConfig         `json:"sandbox" yaml:"sandbox"`
@@ -42,6 +43,8 @@ type Config struct {
 	HeartbeatTasks *HeartbeatTasksConfig `json:"heartbeat_tasks,omitempty" yaml:"heartbeat_tasks,omitempty"` // nil = heartbeat tasks disabled
 	Policies       *PoliciesConfig       `json:"policies,omitempty" yaml:"policies,omitempty"`               // nil = no policy enforcement
 	EmbeddedAgent  *EmbeddedAgentConfig  `json:"embedded_agent,omitempty" yaml:"embedded_agent,omitempty"`   // nil = embedded agent with fallback enabled
+	Soul           *SoulConfig           `json:"soul,omitempty" yaml:"soul,omitempty"`                       // nil = soul evolution disabled
+	Optimization   *OptimizationConfig   `json:"optimization,omitempty" yaml:"optimization,omitempty"`       // nil = all token optimizations disabled
 }
 
 // Mode returns the runtime mode. Defaults to "gateway".
@@ -89,6 +92,49 @@ type PostgresStorageConfig struct {
 type EmbeddedAgentConfig struct {
 	Enabled  bool `json:"enabled" yaml:"enabled"`   // Default: true.
 	Fallback bool `json:"fallback" yaml:"fallback"` // Use embedded agent as fallback when no remote agents connected. Default: true.
+}
+
+// SoulConfig configures the soul evolution subsystem.
+// When nil, the soul is disabled and the system operates without self-improvement.
+type SoulConfig struct {
+	Enabled                bool `json:"enabled" yaml:"enabled"`
+	ReflectionIntervalMins int  `json:"reflection_interval_mins,omitempty" yaml:"reflection_interval_mins,omitempty"` // Default: 60. 0 = reflection disabled.
+	MaxPatternsPerCategory int  `json:"max_patterns_per_category,omitempty" yaml:"max_patterns_per_category,omitempty"` // Default: 20.
+	MaxReflections         int  `json:"max_reflections,omitempty" yaml:"max_reflections,omitempty"`                     // Default: 50.
+	MaxStrategies          int  `json:"max_strategies,omitempty" yaml:"max_strategies,omitempty"`                       // Default: 20.
+}
+
+// OptimizationConfig controls token-reduction optimizations for LLM calls.
+// When nil, all optimizations are disabled (fully backward-compatible).
+type OptimizationConfig struct {
+	LazyToolLoading       bool    `json:"lazy_tool_loading" yaml:"lazy_tool_loading"`                                   // Send only intent-relevant tools instead of all. Default: false.
+	MaxRunbookMatches     int     `json:"max_runbook_matches,omitempty" yaml:"max_runbook_matches,omitempty"`             // Cap injected runbooks per call. Default: 2.
+	RunbookMatchThreshold float64 `json:"runbook_match_threshold,omitempty" yaml:"runbook_match_threshold,omitempty"`     // Minimum score for runbook injection. Default: 0.05.
+	SkillSummaryMode      string  `json:"skill_summary_mode,omitempty" yaml:"skill_summary_mode,omitempty"`               // "full", "compact", or "none". Default: "full".
+}
+
+// MaxRunbookMatchesOrDefault returns the configured cap, defaulting to 2.
+func (o *OptimizationConfig) MaxRunbookMatchesOrDefault() int {
+	if o != nil && o.MaxRunbookMatches > 0 {
+		return o.MaxRunbookMatches
+	}
+	return 2
+}
+
+// RunbookThresholdOrDefault returns the configured threshold, defaulting to 0.05.
+func (o *OptimizationConfig) RunbookThresholdOrDefault() float64 {
+	if o != nil && o.RunbookMatchThreshold > 0 {
+		return o.RunbookMatchThreshold
+	}
+	return 0.05
+}
+
+// SkillSummaryModeOrDefault returns the configured mode, defaulting to "full".
+func (o *OptimizationConfig) SkillSummaryModeOrDefault() string {
+	if o != nil && o.SkillSummaryMode != "" {
+		return o.SkillSummaryMode
+	}
+	return "full"
 }
 
 // DatabaseConfig configures PostgreSQL persistence.
@@ -155,7 +201,44 @@ type OrchestratorConfig struct {
 	SkillsDirs               []string `json:"skills_dirs,omitempty" yaml:"skills_dirs,omitempty"`                   // Additional skill directories.
 	SkillPollIntervalSeconds int      `json:"skill_poll_interval_seconds" yaml:"skill_poll_interval_seconds"`       // 0 = one-shot load (backward compat).
 	CommunityPacksDirs       []string `json:"community_packs_dirs,omitempty" yaml:"community_packs_dirs,omitempty"` // Paths to community skill pack directories.
-	PlanningEnabled          bool     `json:"planning_enabled" yaml:"planning_enabled"`                             // Enable ReAct planning for complex tasks.
+	PlanningEnabled          bool            `json:"planning_enabled" yaml:"planning_enabled"`                             // Enable ReAct planning for complex tasks.
+	Recovery                 *RecoveryConfig `json:"recovery,omitempty" yaml:"recovery,omitempty"`                         // nil = recovery disabled.
+}
+
+// RecoveryConfig configures the failure recovery subsystem.
+// When nil, failed tasks remain failed (current behavior, backward compatible).
+type RecoveryConfig struct {
+	Enabled           bool     `json:"enabled" yaml:"enabled"`
+	MaxRetries        int      `json:"max_retries" yaml:"max_retries"`                 // Per-task default. Default: 2.
+	MaxRecoveryDepth  int      `json:"max_recovery_depth" yaml:"max_recovery_depth"`   // Max nested recovery attempts. Default: 1.
+	RecoveryBudgetPct float64  `json:"recovery_budget_pct" yaml:"recovery_budget_pct"` // Max % of workflow budget for recovery. Default: 0.25.
+	AllowedTools      []string `json:"allowed_tools" yaml:"allowed_tools"`             // Extra tools for the diagnostician (beyond read-only).
+	AllowRetry        bool     `json:"allow_retry" yaml:"allow_retry"`                 // Allow automatic retry of failed tasks. Default: true.
+	EscalateOnFailure bool     `json:"escalate_on_failure" yaml:"escalate_on_failure"` // Notify when recovery exhausted. Default: true.
+}
+
+// MaxRetriesOrDefault returns the max retries, defaulting to 2.
+func (r *RecoveryConfig) MaxRetriesOrDefault() int {
+	if r != nil && r.MaxRetries > 0 {
+		return r.MaxRetries
+	}
+	return 2
+}
+
+// MaxRecoveryDepthOrDefault returns the max recovery depth, defaulting to 1.
+func (r *RecoveryConfig) MaxRecoveryDepthOrDefault() int {
+	if r != nil && r.MaxRecoveryDepth > 0 {
+		return r.MaxRecoveryDepth
+	}
+	return 1
+}
+
+// RecoveryBudgetPctOrDefault returns the recovery budget percentage, defaulting to 0.25.
+func (r *RecoveryConfig) RecoveryBudgetPctOrDefault() float64 {
+	if r != nil && r.RecoveryBudgetPct > 0 {
+		return r.RecoveryBudgetPct
+	}
+	return 0.25
 }
 
 // SkillPollInterval returns the skill polling interval. 0 = disabled (one-shot load).
@@ -607,7 +690,9 @@ type WebSocketGatewayConfig struct {
 	Path                       string `json:"path" yaml:"path"`                                                   // URL path for WebSocket endpoint. Default: "/ws/agents".
 	AgentToken                 string `json:"agent_token" yaml:"agent_token"`                                     // Shared token for agent authentication.
 	HeartbeatIntervalSeconds   int    `json:"heartbeat_interval_seconds" yaml:"heartbeat_interval_seconds"`       // Default: 30.
+	AckTimeoutSeconds          int    `json:"ack_timeout_seconds,omitempty" yaml:"ack_timeout_seconds,omitempty"`   // Time to wait for task acknowledgment before re-queuing. Default: 30.
 	TaskReassignTimeoutSeconds int    `json:"task_reassign_timeout_seconds" yaml:"task_reassign_timeout_seconds"` // Default: 120.
+	StaleTimeoutSeconds        int    `json:"stale_timeout_seconds,omitempty" yaml:"stale_timeout_seconds,omitempty"` // Time without heartbeat before evicting agent. Default: 3x heartbeat interval.
 }
 
 // WSPath returns the WebSocket path with a default of "/ws/agents".
@@ -626,6 +711,14 @@ func (w *WebSocketGatewayConfig) WSHeartbeatInterval() time.Duration {
 	return 30 * time.Second
 }
 
+// WSAckTimeout returns the task acknowledgment timeout with a default of 30s.
+func (w *WebSocketGatewayConfig) WSAckTimeout() time.Duration {
+	if w != nil && w.AckTimeoutSeconds > 0 {
+		return time.Duration(w.AckTimeoutSeconds) * time.Second
+	}
+	return 30 * time.Second
+}
+
 // WSTaskReassignTimeout returns the task reassign timeout with a default of 120s.
 func (w *WebSocketGatewayConfig) WSTaskReassignTimeout() time.Duration {
 	if w != nil && w.TaskReassignTimeoutSeconds > 0 {
@@ -634,9 +727,29 @@ func (w *WebSocketGatewayConfig) WSTaskReassignTimeout() time.Duration {
 	return 120 * time.Second
 }
 
+// WSStaleTimeout returns the stale connection timeout with a default of 3x heartbeat interval.
+func (w *WebSocketGatewayConfig) WSStaleTimeout() time.Duration {
+	if w != nil && w.StaleTimeoutSeconds > 0 {
+		return time.Duration(w.StaleTimeoutSeconds) * time.Second
+	}
+	return 3 * w.WSHeartbeatInterval()
+}
+
 // CLIGatewayConfig configures the interactive CLI gateway.
 type CLIGatewayConfig struct {
-	Enabled bool `json:"enabled" yaml:"enabled"`
+	Enabled bool   `json:"enabled" yaml:"enabled"`
+	UserID  string `json:"user_id,omitempty" yaml:"user_id,omitempty"` // Override CLI user ID. Default: "cli-user". Can also be set via AKILI_CLI_USER env var.
+}
+
+// CLIUserID returns the configured user ID with fallback to env and then "cli-user".
+func (c *CLIGatewayConfig) CLIUserID() string {
+	if c != nil && c.UserID != "" {
+		return c.UserID
+	}
+	if env := os.Getenv("AKILI_CLI_USER"); env != "" {
+		return env
+	}
+	return "cli-user"
 }
 
 // HTTPGatewayConfig configures the HTTP API gateway.
@@ -799,6 +912,11 @@ func Load(path string) (*Config, error) {
 	// Data directory override from environment.
 	if envDD := os.Getenv("AKILI_DATA_DIR"); envDD != "" {
 		cfg.DataDir = envDD
+	}
+
+	// Autonomous mode override from environment.
+	if envAM := os.Getenv("AKILI_AUTONOMOUS_MODE"); envAM == "true" || envAM == "1" {
+		cfg.AutonomousMode = true
 	}
 
 	// Gateway token overrides from environment.

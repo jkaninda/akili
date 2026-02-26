@@ -1,20 +1,9 @@
 {
   "workspace": "",
   "data_dir": "",
-  "autonomous_mode": true,
+  "autonomous_mode": false,
   "storage": {
     "driver": "sqlite"
-  },
-    "soul": {
-    "enabled": false,
-    "reflection_interval_mins": 60
-  },
-  
-  "optimization": {
-    "lazy_tool_loading": true,
-    "max_runbook_matches": 1,
-    "runbook_match_threshold": 0.15,
-    "skill_summary_mode": "compact"
   },
   "security": {
     "default_permissions": ["read_files", "web_search"],
@@ -27,20 +16,17 @@
         "require_approval": []
       },
       "operator": {
-        "permissions": ["read_files", "web_search", "shell_exec", "write_files", "git_read", "git_write", "database_read", "browser_navigate", "mcp_filesystem", "create_cronjob", "create_alert", "send_notification", "infra_lookup", "infra_exec", "mcp__infra"],
+        "permissions": ["read_files", "web_search", "shell_exec", "write_files", "git_read", "git_write", "database_read", "browser_navigate", "create_cronjob", "create_alert", "send_notification", "infra_lookup", "infra_exec"],
         "max_risk_level": "high",
         "require_approval": ["shell_exec", "git_write", "create_cronjob", "create_alert", "infra_exec"]
       },
       "admin": {
-        "permissions": ["read_files", "web_search", "shell_exec", "write_files", "git_read", "git_write", "code_exec", "database_read", "browser_navigate", "create_cronjob", "create_alert", "send_notification", "infra_lookup", "infra_manage", "infra_exec", "mcp_filesystem", "mcp__infra"],
+        "permissions": ["read_files", "web_search", "shell_exec", "write_files", "git_read", "git_write", "code_exec", "database_read", "browser_navigate", "create_cronjob", "create_alert", "send_notification", "infra_lookup", "infra_manage", "infra_exec"],
         "max_risk_level": "critical",
         "require_approval": ["code_exec", "create_alert", "infra_exec", "infra_manage"]
       }
     },
-    "user_roles": {
-      "cli-user": "operator",
-      "telegram-user": "operator"
-    }
+    "user_roles": {}
   },
   "budget": {
     "default_limit_usd": 10.0
@@ -67,39 +53,19 @@
       "max_response_bytes": 5242880,
       "timeout_seconds": 15
     },
+    "browser": {
+      "allowed_domains": [],
+      "max_response_bytes": 5242880,
+      "timeout_seconds": 15,
+      "max_navigations_per_call": 5
+    },
     "code": {
       "allowed_languages": ["python3", "sh"]
     },
     "git": {
       "allowed_paths": []
     },
-    "mcp": [
-      {
-        "name": "filesystem",
-        "transport": "stdio",
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-        "permission": "mcp_filesystem",
-        "risk_level": "medium"
-      },
-      {
-      "name": "kubernetes-mcp-server",
-      "transport": "stdio",
-      "command": "npx",
-      "args": ["-y", "kubernetes-mcp-server@latest"],
-      "permission": "mcp__infra",
-      "risk_level": "high"
-    },
-   {
-      "name": "github",
-      "transport": "streamable_http",
-      "url": "https://api.githubcopilot.com/mcp/",
-      "headers": {
-        "Authorization": "Bearer ${input:github_mcp_pat}"
-      }
-      }
-
-    ]
+    "mcp": []
   },
   "gateways": {
     "cli": {
@@ -121,6 +87,7 @@
       "path": "/ws/agents",
       "agent_token": "change-me",
       "heartbeat_interval_seconds": 30,
+      "ack_timeout_seconds": 30,
       "task_reassign_timeout_seconds": 120
     },
     "slack": {
@@ -137,14 +104,12 @@
       }
     },
     "telegram": {
-      "enabled": true,
+      "enabled": false,
       "bot_token": "",
       "webhook_url": "",
       "listen_addr": ":3001",
-      "allowed_users": [1110002364],
-      "user_mapping": {
-        "1110002364": "jkaninda"
-      },
+      "allowed_users": [],
+      "user_mapping": {},
       "poll_timeout_seconds": 30,
       "rate_limit": {
         "requests_per_minute": 30,
@@ -176,7 +141,7 @@
   },
   "providers": {
     "default": "anthropic",
-    "fallback": ["ollama","openai", "gemini"],
+    "fallback": ["openai", "gemini"],
     "anthropic": {
       "model": "claude-sonnet-4-5-20250929"
     },
@@ -201,7 +166,7 @@
     "email": {
       "host": "smtp.example.com",
       "port": 587,
-      "username": "alerts@example.com",
+      "username": "",
       "from": "akili@example.com",
       "tls": true
     },
@@ -227,7 +192,7 @@
     "max_concurrent_tasks": 3,
     "quick_task_timeout_seconds": 60,
     "long_task_timeout_seconds": 300,
-    "default_user_id": "cli-user"
+    "default_user_id": "system"
   },
   "orchestrator": {
     "enabled": true,
@@ -276,5 +241,23 @@
     "providers": [
       { "type": "env" }
     ]
+  },
+  "policies": {
+    "policies": [],
+    "bindings": {}
+  },
+  "soul": {
+    "enabled": false,
+    "reflection_interval_mins": 60
+  },
+  "optimization": {
+    "lazy_tool_loading": true,
+    "max_runbook_matches": 3,
+    "runbook_match_threshold": 0.15,
+    "skill_summary_mode": "compact"
+  },
+  "embedded_agent": {
+    "enabled": true,
+    "fallback": true
   }
 }

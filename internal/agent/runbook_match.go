@@ -7,8 +7,14 @@ import (
 )
 
 // matchRunbooks scores each runbook against the query using keyword overlap
-// and returns the top N matches. Avoids importing skillloader to prevent cycles.
+// and returns the top N matches with the default threshold (0.05).
 func matchRunbooks(query string, runbooks []Runbook, topN int) []Runbook {
+	return matchRunbooksWithThreshold(query, runbooks, topN, 0.05)
+}
+
+// matchRunbooksWithThreshold scores each runbook against the query using keyword
+// overlap and returns the top N matches above the given threshold.
+func matchRunbooksWithThreshold(query string, runbooks []Runbook, topN int, threshold float64) []Runbook {
 	if len(runbooks) == 0 || topN <= 0 {
 		return nil
 	}
@@ -52,7 +58,7 @@ func matchRunbooks(query string, runbooks []Runbook, topN int) []Runbook {
 			score *= 2.0
 		}
 
-		if score > 0.05 {
+		if score > threshold {
 			results = append(results, scored{rb: rb, score: score})
 		}
 	}

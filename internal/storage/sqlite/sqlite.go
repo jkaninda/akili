@@ -33,6 +33,7 @@ import (
 	"github.com/jkaninda/akili/internal/orchestrator"
 	"github.com/jkaninda/akili/internal/scheduler"
 	"github.com/jkaninda/akili/internal/security"
+	"github.com/jkaninda/akili/internal/soul"
 	"github.com/jkaninda/akili/internal/storage"
 	pgstore "github.com/jkaninda/akili/internal/storage/postgres"
 )
@@ -67,6 +68,7 @@ type Store struct {
 	roles            security.RoleStore
 	budgets          security.BudgetStore
 	audit            security.AuditStore
+	soulStore        soul.SoulStore
 
 	// In-memory agent registry (not persisted to SQLite).
 	agentsMu sync.RWMutex
@@ -149,6 +151,7 @@ func (s *Store) Migrate(_ context.Context) error {
 		&pgstore.AgentHeartbeatModel{},
 		&pgstore.HeartbeatTaskModel{},
 		&pgstore.HeartbeatTaskResultModel{},
+		&pgstore.SoulEventModel{},
 	); err != nil {
 		return err
 	}
@@ -332,6 +335,15 @@ func (s *Store) Audit() security.AuditStore {
 		s.audit = pgstore.NewAuditRepository(s.db)
 	}
 	return s.audit
+}
+
+func (s *Store) Soul() soul.SoulStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.soulStore == nil {
+		s.soulStore = pgstore.NewSoulRepository(s.db)
+	}
+	return s.soulStore
 }
 
 // --- Agent Registry (in-memory) ---

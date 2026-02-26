@@ -160,9 +160,7 @@ func (g *Gateway) WithHandler(pattern string, handler http.Handler) *Gateway {
 func (g *Gateway) Start(ctx context.Context) error {
 	// Metrics/tracing middleware (applied globally).
 	if g.config.Metrics != nil || g.config.Tracer != nil {
-		g.okapi.UseMiddleware(func(next http.Handler) http.Handler {
-			return observability.HTTPMetricsMiddleware(g.config.Metrics, g.config.Tracer, next)
-		})
+		g.okapi.Use(observability.MetricsMiddleware(g.config.Metrics, g.config.Tracer))
 	}
 
 	// Authenticated /v1 group.
@@ -170,7 +168,7 @@ func (g *Gateway) Start(ctx context.Context) error {
 
 	// Query endpoints.
 	g.group.Post("/query", g.handleQuery,
-		okapi.DocSummary("Send a query to the AI agent"),
+		okapi.DocSummary("Send a query to the AI operator"),
 		okapi.DocTags("Query"),
 		okapi.DocRequestBody(QueryRequest{}),
 		okapi.DocResponse(QueryResponse{}),

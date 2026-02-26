@@ -1,8 +1,8 @@
 # Akili
 
-**Security-First AI Agent Built for DevOps, SRE, and Platform Engineering**
+**Security-First Autonomous AI Operator System for DevOps, SRE, and Platform Engineering**
 
-Akili is a production-grade AI agent that automates incident triage, runbook execution, infrastructure operations, and cost optimization with strict security boundaries enforced at every step.
+Akili is a production-grade autonomous AI operator system that automates incident triage, runbook execution, infrastructure operations, and cost optimization with strict security boundaries enforced at every step.
 
 Akili is moving beyond the “AI assistant” category; it’s shaping up to be a policy-enforced AI runtime built specifically for DevOps, SRE, and platform teams.
 
@@ -1235,7 +1235,7 @@ graph LR
 ```
 $ ./akili
 
-Akili — Security-First AI Agent for DevOps & SRE
+Akili — Autonomous AI Operator System for DevOps, SRE, and Platform Teams
 Type your message (or "exit" to quit).
 
 akili> Show me the git log for /home/project

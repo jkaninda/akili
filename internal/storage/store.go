@@ -19,6 +19,7 @@ import (
 	"github.com/jkaninda/akili/internal/orchestrator"
 	"github.com/jkaninda/akili/internal/scheduler"
 	"github.com/jkaninda/akili/internal/security"
+	"github.com/jkaninda/akili/internal/soul"
 )
 
 // Store is the unified persistence interface for Akili.
@@ -45,6 +46,9 @@ type Store interface {
 	Roles() security.RoleStore
 	Budgets() security.BudgetStore
 	Audit() security.AuditStore
+
+	// Soul evolution store.
+	Soul() soul.SoulStore
 
 	// Organization management.
 	EnsureOrg(ctx context.Context, name string) (uuid.UUID, error)

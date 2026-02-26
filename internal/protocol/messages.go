@@ -81,7 +81,16 @@ type AgentCapabilities struct {
 
 // HeartbeatPayload is sent with MsgAgentHeartbeat periodically.
 type HeartbeatPayload struct {
-	ActiveTasks int `json:"active_tasks"`
+	ActiveTasks int             `json:"active_tasks"`
+	TaskIDs     []string        `json:"task_ids,omitempty"`     // IDs of tasks currently being executed.
+	TaskStates  []TaskStateInfo `json:"task_states,omitempty"`  // Detailed per-task state (optional).
+}
+
+// TaskStateInfo provides per-task state in heartbeat messages.
+type TaskStateInfo struct {
+	TaskID  string `json:"task_id"`
+	State   string `json:"state"`   // "accepted", "running"
+	Elapsed string `json:"elapsed"` // Duration since task started.
 }
 
 // TaskAcceptedPayload is sent with MsgTaskAccepted when an agent starts working on a task.

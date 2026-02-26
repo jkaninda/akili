@@ -11,6 +11,10 @@
       "default_org_name": "default"
     }
   },
+  "soul": {
+    "enabled": false,
+    "reflection_interval_mins": 60
+  },
   "security": {
     "default_permissions": ["read_files", "web_search"],
     "require_approval": ["write_files", "shell_exec"],
@@ -58,12 +62,6 @@
     },
     "code": {
       "allowed_languages": ["python3", "sh"]
-    },
-    "database": {
-      "dsn": "",
-      "default_org_name": "",
-      "max_rows": 1000,
-      "timeout_seconds": 30
     },
     "git": {
       "allowed_paths": []
